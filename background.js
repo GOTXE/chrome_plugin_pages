@@ -1,0 +1,63 @@
+import { getSettings } from './shared/store.js';
+import { requestSync } from './shared/sync.js';
+
+const POPUP_PATH = 'app/app.html?mode=popup';
+const PANEL_PATH = 'app/app.html?mode=panel';
+
+// Alterna entre popup y panel lateral según el ajuste del usuario.
+async function applyUiMode() {
+  const { uiMode } = await getSettings();
+  const panel = chrome.sidePanel;
+
+  if (uiMode === 'panel' && panel) {
+    await panel.setOptions({ path: PANEL_PATH, enabled: true });
+    await chrome.action.setPopup({ popup: '' });
+    await panel.setPanelBehavior({ openPanelOnActionClick: true });
+  } else {
+    await chrome.action.setPopup({ popup: POPUP_PATH });
+    if (panel) {
+      await panel.setOptions({ path: PANEL_PATH, enabled: true });
+      await panel.setPanelBehavior({ openPanelOnActionClick: false });
+    }
+  }
+}
+
+async function safeApply() {
+  try {
+    await applyUiMode();
+  } catch (err) {
+    console.error('No se pudo aplicar el modo de interfaz:', err);
+  }
+}
+
+// Respaldo: solo se dispara si el icono se pulsa sin popup ni comportamiento de panel aplicados.
+chrome.action.onClicked.addListener(async (tab) => {
+  try {
+    const { uiMode } = await getSettings();
+    if (uiMode === 'panel' && chrome.sidePanel) {
+      await chrome.sidePanel.open({ windowId: tab.windowId });
+    } else {
+      await applyUiMode();
+      await chrome.action.openPopup();
+    }
+  } catch (err) {
+    console.error('No se pudo abrir la interfaz:', err);
+  }
+});
+
+// Sincronización con marcadores: cambios locales, cambios que llegan de otros dispositivos y ajustes.
+for (const name of ['onCreated', 'onRemoved', 'onChanged', 'onMoved', 'onImportEnded']) {
+  chrome.bookmarks[name].addListener(requestSync);
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (changes.saved || changes.settings)) requestSync();
+});
+chrome.runtime.onStartup.addListener(requestSync);
+requestSync();
+
+safeApply(); // cada vez que arranca el servicio, no solo en instalación o inicio
+chrome.runtime.onInstalled.addListener(safeApply);
+chrome.runtime.onStartup.addListener(safeApply);
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.settings) safeApply();
+});

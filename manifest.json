@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Leer luego",
+  "version": "0.1.0",
+  "description": "Guarda las pestañas que dejaste para leer más tarde y cierra las que no usas, sin perder las que necesitas abiertas.",
+  "permissions": ["tabs", "storage", "unlimitedStorage", "sidePanel", "bookmarks", "favicon"],
+  "action": {
+    "default_title": "Leer luego"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}

@@ -1,0 +1,21 @@
+# Paquetes y claves generados al "Empaquetar extensión"
+*.crx
+*.pem
+*.zip
+
+# Dependencias y compilados (por si se añade tooling más adelante)
+node_modules/
+dist/
+
+# Entorno y secretos (p. ej. una clave de API de un modelo)
+.env
+.env.*
+
+# Editor y sistema
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Archivos locales de Claude Code
+.claude/settings.local.json

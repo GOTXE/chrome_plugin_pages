@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leer luego</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="tabs" aria-selected="true">Pestañas</button>
+    <button role="tab" data-view="saved" aria-selected="false">Guardadas <span id="saved-count" class="badge">0</span></button>
+    <button role="tab" data-view="settings" aria-selected="false">Ajustes</button>
+  </nav>
+
+  <main>
+    <section id="view-tabs">
+      <p class="hint" id="tabs-summary"></p>
+      <p class="hint" id="debug"></p>
+      <ul class="list" id="tabs-list"></ul>
+      <footer class="actions">
+        <button id="save-close" class="primary">Guardar y cerrar</button>
+      </footer>
+    </section>
+
+    <section id="view-saved" hidden>
+      <div class="toolbar">
+        <input type="search" id="saved-search" placeholder="Buscar…" aria-label="Buscar guardadas">
+        <button id="copy-urls" title="Copiar las URL al portapapeles">Copiar</button>
+        <button id="export-md">Exportar .md</button>
+      </div>
+      <ul class="list" id="saved-list"></ul>
+    </section>
+
+    <section id="view-settings" hidden>
+      <fieldset>
+        <legend>Interfaz</legend>
+        <label><input type="radio" name="uiMode" value="popup"> Popup</label>
+        <label><input type="radio" name="uiMode" value="panel" id="mode-panel"> Panel lateral</label>
+        <p class="hint" id="panel-unsupported" hidden>Este navegador no admite panel lateral para extensiones.</p>
+      </fieldset>
+      <label><input type="checkbox" id="sync-bookmarks"> Sincronizar guardadas con la carpeta de marcadores "Leer luego" (así viajan con tu Sync a otros dispositivos)</label>
+      <label class="field">Días sin abrir para proponer "leer luego"
+        <input type="number" id="idle-days" min="0" max="365">
+      </label>
+      <label class="field">Dominios que nunca se proponen (uno por línea)
+        <textarea id="keep-domains" rows="4" placeholder="github.com"></textarea>
+      </label>
+      <label class="field">Dominios que siempre son "leer luego" (uno por línea)
+        <textarea id="later-domains" rows="4" placeholder="medium.com"></textarea>
+      </label>
+    </section>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
