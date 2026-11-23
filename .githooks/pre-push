@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Impide hacer push a main/master desde cualquier herramienta. Todo cambio entra por PR.
+# Se activa con: git config core.hooksPath .githooks
+protected='^refs/heads/(main|master)$'
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" =~ $protected ]]; then
+    echo "✖ Push a ${remote_ref#refs/heads/} bloqueado: crea una rama y abre un PR." >&2
+    exit 1
+  fi
+done
+exit 0

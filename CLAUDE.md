@@ -2,6 +2,13 @@
 
 Extensión Manifest V3 para Brave/Chrome. Guarda como "leer luego" las pestañas que llevan tiempo abiertas y las cierra, sin tocar las que se necesitan. JavaScript puro con módulos ES, sin build ni dependencias.
 
+## Flujo de trabajo
+
+- **Nunca se hace push a `main`: todo cambio entra por PR.** Rama nueva (`git switch -c tipo/descripcion`), commit, push de la rama y `gh pr create`. El merge lo decide el dueño del repo.
+- El repo es público y `main` está protegido en GitHub (PR obligatorio, sin force push ni borrado, también para administradores).
+- Dos hooks refuerzan la regla en local: `.githooks/pre-push` (git; se activa con `git config core.hooksPath .githooks` tras clonar) y `.claude/hooks/block-main-push.sh` (Claude Code, configurado en `.claude/settings.json`).
+- Mensajes de commit en español, con la línea `Co-Authored-By` cuando los redacte Claude.
+
 ## Probar
 
 No hay tests ni paso de compilación. En `brave://extensions` (o `chrome://extensions`): modo desarrollador → "Cargar descomprimida" → elegir esta carpeta. Tras cambiar código, recargar la extensión con el botón de la flecha circular. No hace falta "Empaquetar extensión".
