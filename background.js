@@ -2,7 +2,10 @@ import { getSettings } from './shared/store.js';
 import { requestSync } from './shared/sync.js';
 
 const POPUP_PATH = 'app/app.html?mode=popup';
-const PANEL_PATH = 'app/app.html?mode=panel';
+// El panel va declarado también en el manifest: lo que se fija con setOptions no sobrevive a
+// un reinicio del navegador, y sin panel registrado sidePanel.open() falla con "No active side panel".
+// La interfaz asume modo panel cuando no recibe ?mode=popup.
+const PANEL_PATH = 'app/app.html';
 
 // Alterna entre popup y panel lateral según el ajuste del usuario.
 async function applyUiMode() {

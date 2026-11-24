@@ -7,6 +7,9 @@
   "action": {
     "default_title": "Leer luego"
   },
+  "side_panel": {
+    "default_path": "app/app.html"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

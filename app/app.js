@@ -4,7 +4,8 @@ import {
 } from '../shared/store.js';
 
 const $ = (id) => document.getElementById(id);
-const mode = new URLSearchParams(location.search).get('mode') === 'panel' ? 'panel' : 'popup';
+// Solo el popup lleva ?mode=popup; el panel lateral se carga desde el manifest, sin parámetros.
+const mode = new URLSearchParams(location.search).get('mode') === 'popup' ? 'popup' : 'panel';
 document.body.classList.add(`mode-${mode}`);
 
 let settings;
