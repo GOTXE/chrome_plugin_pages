@@ -56,6 +56,10 @@ chrome.runtime.onStartup.addListener(requestSync);
 requestSync();
 
 safeApply(); // cada vez que arranca el servicio, no solo en instalación o inicio
+// La interfaz pide re-aplicar el modo (al cambiar el ajuste o si detecta que no coincide).
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type === 'apply-ui') safeApply();
+});
 chrome.runtime.onInstalled.addListener(safeApply);
 chrome.runtime.onStartup.addListener(safeApply);
 chrome.storage.onChanged.addListener((changes, area) => {

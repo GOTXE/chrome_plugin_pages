@@ -63,9 +63,6 @@ document.querySelector('.tabs').addEventListener('click', (e) => {
 
 async function loadTabs() {
   const tabs = await chrome.tabs.query({});
-  const wins = await chrome.windows.getAll({ populate: true, windowTypes: ['normal', 'popup', 'app', 'devtools'] });
-  console.log('[leer-luego] ventanas', wins.map((w) => ({ id: w.id, type: w.type, incognito: w.incognito, tabs: w.tabs.length })));
-  $('debug').textContent = `Diagnóstico: ${wins.map((w) => `${w.type}${w.incognito ? '/privada' : ''}:${w.tabs.length}`).join(' · ')}`;
   const now = Date.now();
   const alive = new Set(tabs.map((tab) => tab.id));
   for (const id of overrides.keys()) if (!alive.has(id)) overrides.delete(id);
@@ -266,9 +263,35 @@ if (!chrome.sidePanel) {
   $('panel-unsupported').hidden = false;
 }
 
+// Muestra el estado real del icono y, si el popup se abrió estando elegido el panel,
+// vuelve a aplicar el modo y ofrece abrir el panel desde aquí (con un clic real del usuario).
+async function checkUiMode() {
+  const popup = await chrome.action.getPopup({});
+  const behavior = chrome.sidePanel ? await chrome.sidePanel.getPanelBehavior() : null;
+  $('ui-state').textContent = `Estado: ajuste=${settings.uiMode} · esta vista=${mode} · popup=${popup ? 'definido' : 'vacío'} · el icono abre el panel=${behavior?.openPanelOnActionClick ?? 'n/d'}`;
+
+  if (mode === 'popup' && settings.uiMode === 'panel' && chrome.sidePanel) {
+    $('mode-banner').hidden = false;
+    chrome.runtime.sendMessage({ type: 'apply-ui' }).catch(() => {});
+  }
+}
+
+$('open-panel').addEventListener('click', async () => {
+  try {
+    const win = await chrome.windows.getLastFocused();
+    await chrome.sidePanel.open({ windowId: win.id });
+    window.close();
+  } catch (err) {
+    console.error(err);
+    toast('No se pudo abrir el panel lateral');
+  }
+});
+
 document.querySelectorAll('input[name="uiMode"]').forEach((radio) => {
   radio.addEventListener('change', async () => {
     settings = await saveSettings({ uiMode: radio.value });
+    await chrome.runtime.sendMessage({ type: 'apply-ui' }).catch(() => {});
+    await checkUiMode();
     toast(radio.value === 'panel'
       ? 'Panel lateral activado: se abrirá al pulsar el icono'
       : 'Popup activado');
@@ -328,5 +351,6 @@ document.addEventListener('visibilitychange', () => {
 
 settings = await getSettings();
 renderSettings();
+await checkUiMode();
 await updateSavedCount();
 await loadTabs();
