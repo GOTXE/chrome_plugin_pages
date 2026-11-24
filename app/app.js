@@ -271,19 +271,32 @@ async function checkUiMode() {
   $('ui-state').textContent = `Estado: ajuste=${settings.uiMode} · esta vista=${mode} · popup=${popup ? 'definido' : 'vacío'} · el icono abre el panel=${behavior?.openPanelOnActionClick ?? 'n/d'}`;
 
   if (mode === 'popup' && settings.uiMode === 'panel' && chrome.sidePanel) {
+    [hostTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     $('mode-banner').hidden = false;
     chrome.runtime.sendMessage({ type: 'apply-ui' }).catch(() => {});
   }
 }
 
+// open() debe ser lo primero tras el clic: un await antes puede hacer perder el gesto del usuario,
+// así que la pestaña activa de la ventana anfitriona se calcula al cargar, no al pulsar.
+let hostTab;
+
 $('open-panel').addEventListener('click', async () => {
-  try {
-    const win = await chrome.windows.getLastFocused();
-    await chrome.sidePanel.open({ windowId: win.id });
-    window.close();
-  } catch (err) {
+  const failure = (err) => {
     console.error(err);
-    toast('No se pudo abrir el panel lateral');
+    $('mode-banner').querySelector('span').textContent = `No se pudo abrir el panel: ${err.message}`;
+  };
+  if (!hostTab) return failure(new Error('no se encontró la pestaña activa'));
+  try {
+    await chrome.sidePanel.open({ windowId: hostTab.windowId });
+    window.close();
+  } catch (windowError) {
+    try {
+      await chrome.sidePanel.open({ tabId: hostTab.id });
+      window.close();
+    } catch {
+      failure(windowError);
+    }
   }
 });
 
