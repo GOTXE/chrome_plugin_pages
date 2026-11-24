@@ -272,31 +272,52 @@ async function checkUiMode() {
   $('ui-state').textContent = `Estado: ajuste=${settings.uiMode} · esta vista=${mode} · popup=${popup ? 'definido' : 'vacío'} · el icono abre el panel=${behavior?.openPanelOnActionClick ?? 'n/d'}`;
 
   if (mode === 'popup' && settings.uiMode === 'panel' && chrome.sidePanel) {
-    [hostTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    host = await resolveHost();
     $('mode-banner').hidden = false;
     chrome.runtime.sendMessage({ type: 'apply-ui' }).catch(() => {});
   }
 }
 
+// Ventana (y pestaña, si se conoce) desde la que se abrió el popup. Se prueban varias consultas
+// porque según el navegador y el tipo de ventana alguna puede devolver vacío.
+async function resolveHost() {
+  const queries = [
+    { active: true, currentWindow: true },
+    { active: true, lastFocusedWindow: true },
+    { active: true, windowType: 'normal' },
+  ];
+  for (const query of queries) {
+    const [tab] = await chrome.tabs.query(query);
+    if (tab) return { windowId: tab.windowId, tabId: tab.id };
+  }
+  const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] }).catch(() => null);
+  return { windowId: win?.id ?? chrome.windows.WINDOW_ID_CURRENT };
+}
+
+async function describeWindows() {
+  const wins = await chrome.windows.getAll({ populate: true }).catch(() => []);
+  return wins.map((win) => `${win.type}${win.incognito ? '/privada' : ''}${win.focused ? '*' : ''}:${win.tabs?.length ?? 0}`).join(' ') || 'ninguna';
+}
+
 // open() debe ser lo primero tras el clic: un await antes puede hacer perder el gesto del usuario,
-// así que la pestaña activa de la ventana anfitriona se calcula al cargar, no al pulsar.
-let hostTab;
+// así que la ventana anfitriona se calcula al cargar, no al pulsar.
+let host;
 
 $('open-panel').addEventListener('click', async () => {
-  const failure = (err) => {
+  const failure = async (err) => {
     console.error(err);
-    $('mode-banner').querySelector('span').textContent = `No se pudo abrir el panel: ${err.message}`;
+    $('mode-banner').querySelector('span').textContent = `No se pudo abrir el panel: ${err.message} · ventanas: ${await describeWindows()}`;
   };
-  if (!hostTab) return failure(new Error('no se encontró la pestaña activa'));
   try {
-    await chrome.sidePanel.open({ windowId: hostTab.windowId });
+    await chrome.sidePanel.open({ windowId: host.windowId });
     window.close();
   } catch (windowError) {
     try {
-      await chrome.sidePanel.open({ tabId: hostTab.id });
+      if (host.tabId === undefined) throw windowError;
+      await chrome.sidePanel.open({ tabId: host.tabId });
       window.close();
     } catch {
-      failure(windowError);
+      await failure(windowError);
     }
   }
 });
