@@ -309,6 +309,7 @@ $('open-panel').addEventListener('click', async () => {
     $('mode-banner').querySelector('span').textContent = `No se pudo abrir el panel: ${err.message} · ventanas: ${await describeWindows()}`;
   };
   try {
+    host ??= await resolveHost();
     await chrome.sidePanel.open({ windowId: host.windowId });
     window.close();
   } catch (windowError) {
