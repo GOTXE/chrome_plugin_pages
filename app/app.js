@@ -1,5 +1,6 @@
 import { MIN_CONFIDENCE, selectPending } from '../shared/ai.js';
 import { CATEGORIES, categoryById } from '../shared/categories.js';
+import { addExamples, forgetAll, forgetDomainRule, forgetExample, getExamples, learnedRules } from '../shared/learning.js';
 import {
   addSaved, classify, domainOf, getApiKey, getClassifications, getSaved, getSettings, getUsageToday,
   isSavable, normalizeDomain, removeSaved, saveSettings, setApiKey, toMarkdown, urlKey,
@@ -179,13 +180,29 @@ async function addDomainRule(target, other, domain) {
   renderSettings();
 }
 
+// Contradecir la propuesta de la IA (marcar lo que dijo "keep" o desmarcar lo que dijo "later") es
+// la señal más clara de qué quiere el usuario. Se anota al pulsar "Guardar y cerrar", cuando es firme.
+function tabCorrections() {
+  return openTabs
+    .filter((entry) => entry.doubtful && entry.ai && isSavable(entry.tab))
+    .filter((entry) => (entry.ai.action === 'later' && entry.ai.confidence >= MIN_CONFIDENCE) !== isSelected(entry))
+    .map((entry) => ({
+      key: entry.key,
+      domain: domainOf(entry.tab.url),
+      title: (entry.tab.title || '').slice(0, 140),
+      action: isSelected(entry) ? 'later' : 'keep',
+    }));
+}
+
 $('save-close').addEventListener('click', async () => {
   const chosen = openTabs.filter(isSelected).map((entry) => entry.tab);
   if (!chosen.length) return;
+  const corrections = tabCorrections();
   $('save-close').disabled = true;
   try {
     // Primero se guarda; solo si funciona se cierran las pestañas.
     const added = await addSaved(chosen);
+    await addExamples(corrections);
 
     // Si una ventana se quedara sin pestañas, se deja una nueva para que no se cierre.
     const closing = new Set(chosen.map((tab) => tab.id));
@@ -435,7 +452,8 @@ async function renderAiBanner() {
     banner.classList.add('ok');
     close.hidden = false; // se puede cerrar antes de que desaparezca solo
     const left = aiStatus.skipped ? ` · ${aiStatus.skipped} quedan por el límite diario` : '';
-    $('ai-banner-text').textContent = `✅ Clasificación terminada: ${aiStatus.classified} URL${left}`;
+    const ruled = aiStatus.ruled ? ` (${aiStatus.ruled} por lo aprendido, sin enviarlas)` : '';
+    $('ai-banner-text').textContent = `✅ Clasificación terminada: ${aiStatus.classified + (aiStatus.ruled ?? 0)} URL${ruled}${left}`;
     banner.hidden = false;
     bannerTimer = setTimeout(renderAiBanner, AI_DONE_VISIBLE_MS - (Date.now() - aiStatus.at) + 50);
   } else {
@@ -451,11 +469,47 @@ $('ai-banner-close').addEventListener('click', async () => {
   if (aiStatus) await chrome.storage.local.set({ aiStatus: { ...aiStatus, dismissed: true } });
 });
 
+// ---------- Lo aprendido ----------
+
+async function renderLearned() {
+  const examples = await getExamples();
+  const rules = learnedRules(examples);
+  $('learned-summary').textContent = examples.length
+    ? `${examples.length} ${examples.length === 1 ? 'ejemplo' : 'ejemplos'} · ${rules.length} ${rules.length === 1 ? 'regla' : 'reglas'} de dominio. Una regla clasifica sin enviar nada a OpenAI.`
+    : 'Todavía no hay nada. Se aprende cuando mueves un marcador a otra subcarpeta o contradices una propuesta de pestañas.';
+  $('learned-clear').hidden = !examples.length;
+
+  const row = (text, onForget, title) => {
+    const forget = el('button', { className: 'icon-btn', textContent: '✕', title });
+    forget.addEventListener('click', onForget);
+    return el('li', {}, el('span', { className: 'what', textContent: text, title: text }), forget);
+  };
+  $('learned-rules').replaceChildren(...rules.map((rule) => {
+    const category = categoryById(rule.category);
+    return row(`${category?.emoji ?? ''} ${rule.domain} → ${category?.label ?? rule.category} (${rule.count} de ${rule.total})`,
+      () => forgetDomainRule(rule.domain), 'Olvidar esta regla');
+  }));
+  if (!rules.length) $('learned-rules').append(el('li', { className: 'muted', textContent: 'Aún ninguna (hacen falta 3 correcciones casi iguales en un dominio)' }));
+
+  $('learned-examples').replaceChildren(...examples.map((example) => {
+    const category = categoryById(example.category);
+    const result = [category && `${category.emoji} ${category.label}`, example.action && (example.action === 'later' ? '📖 leer luego' : '🔒 mantener')].filter(Boolean).join(' · ');
+    return row(`${example.domain} — ${example.title} → ${result}`, () => forgetExample(example.key), 'Olvidar este ejemplo');
+  }));
+}
+
+$('learned-clear').addEventListener('click', async () => {
+  if (confirm('¿Olvidar todo lo aprendido? Las categorías de los enlaces ya clasificados no cambian.')) await forgetAll();
+});
+$('ai-learning').addEventListener('change', async () => {
+  settings = await saveSettings({ aiLearning: $('ai-learning').checked });
+});
+
 async function renderAiStatus() {
   const { aiStatus } = await chrome.storage.local.get('aiStatus');
   const used = await getUsageToday();
   const parts = [`Hoy: ${used}/${settings.aiDailyLimit} URL`];
-  if (aiStatus?.ok) parts.push(`última pasada: ${aiStatus.classified} clasificadas (${new Date(aiStatus.at).toLocaleTimeString()})`);
+  if (aiStatus?.ok) parts.push(`última pasada: ${aiStatus.classified} clasificadas${aiStatus.ruled ? ` + ${aiStatus.ruled} por lo aprendido` : ''} (${new Date(aiStatus.at).toLocaleTimeString()})`);
   if (aiStatus && !aiStatus.ok) parts.push(`⚠ ${aiStatus.message}`);
   $('ai-status').textContent = parts.join(' · ');
 }
@@ -474,6 +528,7 @@ function renderSettings() {
   $('group-by').value = settings.savedGroupBy;
   $('ai-enabled').checked = settings.aiEnabled;
   for (const radio of document.querySelectorAll('input[name="aiMode"]')) radio.checked = radio.value === settings.aiMode;
+  $('ai-learning').checked = settings.aiLearning;
   $('ai-model').value = settings.aiModel;
   $('ai-limit').value = settings.aiDailyLimit;
   $('ai-key').placeholder = apiKeySet ? 'Clave guardada (escribe otra para cambiarla)' : 'sk-...';
@@ -647,6 +702,7 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   if (changes.openaiKey || changes.settings) renderSettings();
   if (changes.aiStatus || changes.aiUsage || changes.settings) renderAiStatus();
   if (changes.aiProgress || changes.aiStatus) renderAiBanner();
+  if (changes.learned) renderLearned();
   if (changes.saved || changes.settings || changes.classifications || changes.openaiKey) scheduleRefresh();
 });
 document.addEventListener('visibilitychange', () => {
@@ -660,6 +716,7 @@ apiKeySet = !!(await getApiKey());
 renderSettings();
 await renderAiStatus();
 await renderAiBanner();
+await renderLearned();
 await checkUiMode();
 await updateSavedCount();
 await loadTabs();

@@ -85,6 +85,16 @@
         <p class="hint">Solo se envían el dominio y el título de cada URL, nunca el contenido de la página. Lo ya clasificado no se vuelve a enviar. La clave se guarda únicamente en este navegador y no se sincroniza: pégala en cada uno. Usa una clave de proyecto con límite de gasto.</p>
         <p class="hint" id="ai-status"></p>
       </fieldset>
+      <fieldset class="stack">
+        <legend>Lo aprendido</legend>
+        <label><input type="checkbox" id="ai-learning"> Usar lo aprendido al clasificar (los ejemplos se envían a OpenAI junto a las URL nuevas)</label>
+        <p class="hint" id="learned-summary"></p>
+        <h3>Reglas por dominio</h3>
+        <ul class="learned-list" id="learned-rules"></ul>
+        <h3>Ejemplos</h3>
+        <ul class="learned-list" id="learned-examples"></ul>
+        <button type="button" id="learned-clear" hidden>Olvidar todo</button>
+      </fieldset>
       <label class="field">Dominios que nunca se proponen (uno por línea)
         <textarea id="keep-domains" rows="4" placeholder="github.com"></textarea>
       </label>

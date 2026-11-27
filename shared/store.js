@@ -10,6 +10,7 @@ export const DEFAULTS = {
   aiMode: 'manual', // 'manual' (con vista previa) | 'auto'
   aiModel: 'gpt-6-luna',
   aiDailyLimit: 300, // URL clasificadas por día como máximo
+  aiLearning: true, // usar lo aprendido (reglas de dominio y ejemplos en el prompt)
   aiBaseUrl: 'https://api.openai.com', // no se muestra en Ajustes; permite apuntar a un servidor de pruebas
 };
 

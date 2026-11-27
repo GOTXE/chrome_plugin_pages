@@ -39,6 +39,15 @@ Comprobación de sintaxis rápida: `node --check` sobre cada `.js`.
 - Texto de la interfaz en español. Construir el DOM con `textContent`/`createElement`, nunca `innerHTML` con títulos o URL de páginas.
 - Permisos mínimos y justificados: `tabs`, `storage`, `unlimitedStorage`, `sidePanel`, `bookmarks`, `favicon`. Evitar `<all_urls>` salvo que una función lo exija.
 
+## Aprendizaje (`shared/learning.js`)
+
+No se entrena nada: se guarda una lista corta (`learned`, máx. 200, un ejemplo por URL) de correcciones del usuario con dominio y título (nunca la ruta), y se usa de dos formas, ambas gobernadas por `settings.aiLearning`:
+1. **Reglas de dominio** (`learnedRules`): >= 3 correcciones del mismo dominio y >= 80 % a la misma categoría → esa categoría se aplica sin llamar a OpenAI (`source: 'rule'`). Sin acción aprendida (`learnedAction`) se propone `keep`, porque una regla de categoría no dice si cerrar la pestaña.
+2. **Ejemplos en el prompt** (`pickExamples`): los del mismo dominio del lote primero, luego los más recientes, hasta 24. Se presentan como datos, nunca como instrucciones.
+- **Qué cuenta como corrección:** (a) mover un marcador entre subcarpetas de categoría, y (b) contradecir una propuesta de la IA en las pestañas, al pulsar "Guardar y cerrar". **No** se aprende de la propia IA: `cache[key].placed` recuerda en qué subcarpeta dejó o vio este equipo cada enlace; solo si luego aparece en otra es corrección. Un enlace que llega ya organizado por Sync se adopta (`source: 'sync'`) sin generar ejemplo, porque no se puede saber si lo puso el usuario o la IA de otro dispositivo.
+- El panel "Lo aprendido" de Ajustes lista ejemplos y reglas y permite olvidarlos: es obligatorio mantenerlo, porque los ejemplos se envían a OpenAI y una señal equivocada debe poder borrarse.
+- Los ejemplos no se sincronizan entre dispositivos (salvo lo que ya viaja en las carpetas).
+
 ## Subcarpetas por tipo en los marcadores
 
 Ajuste `organizeBookmarks` (apagado por defecto: reorganiza los marcadores del usuario). Dentro de "Leer luego" hay una subcarpeta por categoría, con el nombre `folderTitle()` (emoji + etiqueta, p. ej. "📰 Noticias").
@@ -58,8 +67,8 @@ Ajuste `organizeBookmarks` (apagado por defecto: reorganiza los marcadores del u
 - **Caché:** `classifications` (por `urlKey`) evita reenviar lo ya clasificado. `aiUsage` limita las URL por día (`aiDailyLimit`). `aiStatus` guarda el último resultado o error y `aiProgress` el avance (lotes de 20). La interfaz los lee de storage —no de la respuesta del mensaje— para mostrar un aviso superior con barra de progreso, el resultado (se cierra solo a los 15 s o con ✕) y los errores (solo con ✕); el service worker pone además una insignia en el icono (`…` clasificando, `!` error) para que se vea con el popup cerrado. Al terminar, `aiStatus` y `aiProgress` se escriben en una sola llamada para que la interfaz no vea estados intermedios.
 - **La ejecuta el service worker** (mensaje `classify`), no el popup, para que no se corte al cerrarlo. Las peticiones se encolan en `classifyUrls`.
 - `settings.aiBaseUrl` no sale en la interfaz: permite apuntar a un servidor falso en pruebas (un servidor local que imite `/v1/responses`) sin gastar dinero.
-- **Categorías:** la lista está en `shared/categories.js`; el código las recibe como dato. Está previsto que el usuario pueda añadir las suyas y que la app aprenda de sus correcciones; aún no está hecho.
+- **Categorías:** la lista está en `shared/categories.js`; el código las recibe como dato. Está previsto que el usuario pueda añadir las suyas (fase 3, pendiente).
 
 ## Fuera de alcance por ahora
 
-Guardar el contenido de los artículos (scraping) se descartó. Aprendizaje a partir de las correcciones del usuario y categorías definidas por el usuario: pendientes, no añadirlos sin que se pida.
+Guardar el contenido de los artículos (scraping) se descartó. Categorías definidas por el usuario y proponer como categoría las subcarpetas propias con varios enlaces: pendientes (fase 3), no añadirlos sin que se pida.
