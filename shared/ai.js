@@ -9,7 +9,7 @@ import {
 
 export const OPENAI_ORIGIN = 'https://api.openai.com';
 export const MIN_CONFIDENCE = 0.7; // por debajo, la IA etiqueta pero no marca la pestaña para cerrar
-const MAX_BATCH = 40;
+const MAX_BATCH = 20; // lotes pequeños: el progreso avanza a menudo y un fallo pierde poco
 const MAX_TITLE = 140;
 
 export class AiError extends Error {}
@@ -160,6 +160,9 @@ async function classifyNow(entries) {
   if (!remaining) throw new AiError(`Límite diario alcanzado (${settings.aiDailyLimit} URL). Puedes subirlo en Ajustes.`);
 
   const batch = pending.slice(0, remaining);
+  const progress = { running: true, total: batch.length, done: 0, startedAt: Date.now() };
+  await chrome.storage.local.set({ aiProgress: progress });
+
   let classified = 0;
   for (let start = 0; start < batch.length; start += MAX_BATCH) {
     const chunk = batch.slice(start, start + MAX_BATCH);
@@ -167,6 +170,7 @@ async function classifyNow(entries) {
     await saveClassifications(results);
     await addUsage(chunk.length);
     classified += Object.keys(results).length;
+    await chrome.storage.local.set({ aiProgress: { ...progress, done: start + chunk.length } });
   }
   return { classified, skipped: pending.length - batch.length };
 }
@@ -179,11 +183,18 @@ export function classifyUrls(entries) {
     try {
       const result = await classifyNow(entries);
       if (!result.nothing) {
-        await chrome.storage.local.set({ aiStatus: { ok: true, at: Date.now(), classified: result.classified, skipped: result.skipped } });
+        // Estado final y fin del progreso en una sola escritura, para que la interfaz no vea un estado intermedio.
+        await chrome.storage.local.set({
+          aiStatus: { ok: true, at: Date.now(), classified: result.classified, skipped: result.skipped },
+          aiProgress: { running: false },
+        });
       }
       return result;
     } catch (err) {
-      await chrome.storage.local.set({ aiStatus: { ok: false, at: Date.now(), message: err.message } });
+      await chrome.storage.local.set({
+        aiStatus: { ok: false, at: Date.now(), message: err.message },
+        aiProgress: { running: false },
+      });
       throw err;
     }
   });

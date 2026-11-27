@@ -19,6 +19,8 @@ let classifications = {};      // caché de la IA: clave de URL -> { category, a
 let apiKeySet = false;         // hay clave de OpenAI guardada (la clave en sí no se carga aquí)
 const attempted = new Set();   // URL ya enviadas a la IA en esta sesión (evita reintentos en bucle)
 const collapsed = new Set();   // grupos de guardadas plegados por el usuario
+let aiRunning = false;         // hay una clasificación en curso (la ejecuta el servicio de fondo)
+let bannerTimer;
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
@@ -348,7 +350,7 @@ async function pendingSaved() {
 }
 
 async function updateAiButtons() {
-  const manual = aiOn() && settings.aiMode === 'manual';
+  const manual = aiOn() && settings.aiMode === 'manual' && !aiRunning;
   const tabs = manual ? pendingTabs().length : 0;
   const saved = manual ? (await pendingSaved()).length : 0;
   $('ai-tabs').hidden = !tabs;
@@ -358,18 +360,14 @@ async function updateAiButtons() {
 }
 
 // La clasificación la hace el servicio de fondo, así no se corta si se cierra el popup.
-async function requestClassification(items, { quiet = false } = {}) {
+async function requestClassification(items) {
   try {
     const result = await chrome.runtime.sendMessage({
       type: 'classify',
       entries: items.map(({ url, title }) => ({ url, title })),
     });
-    if (result?.error) {
-      toast(`🤖 ${result.error}`);
-      return false;
-    }
-    if (!quiet) toast(`🤖 ${result?.classified ?? 0} clasificadas`);
-    return true;
+    // El progreso, el resultado y los errores los muestra el aviso superior (leído de storage).
+    return !result?.error;
   } catch (err) {
     console.error(err);
     toast('🤖 No se pudo clasificar');
@@ -407,8 +405,51 @@ async function autoClassify() {
   const items = [...pendingTabs(), ...(await pendingSaved())].filter((item) => !attempted.has(item.key));
   if (!items.length) return;
   for (const item of items) attempted.add(item.key);
-  await requestClassification(items, { quiet: true });
+  await requestClassification(items);
 }
+
+// Aviso superior: progreso mientras clasifica, resultado al terminar y errores hasta que se cierren.
+async function renderAiBanner() {
+  const { aiProgress, aiStatus } = await chrome.storage.local.get(['aiProgress', 'aiStatus']);
+  const banner = $('ai-banner');
+  const bar = $('ai-progress');
+  const close = $('ai-banner-close');
+  clearTimeout(bannerTimer);
+  banner.classList.remove('ok', 'err');
+  bar.hidden = true;
+  close.hidden = true;
+
+  aiRunning = !!aiProgress?.running && Date.now() - aiProgress.startedAt < 5 * 60_000;
+  if (aiRunning) {
+    $('ai-banner-text').textContent = `🤖 Clasificando… ${aiProgress.done}/${aiProgress.total}`;
+    bar.max = aiProgress.total;
+    bar.value = aiProgress.done;
+    bar.hidden = false;
+    banner.hidden = false;
+  } else if (aiStatus && !aiStatus.ok && !aiStatus.dismissed) {
+    banner.classList.add('err');
+    $('ai-banner-text').textContent = `⚠ ${aiStatus.message}`;
+    close.hidden = false;
+    banner.hidden = false;
+  } else if (aiStatus?.ok && !aiStatus.dismissed && Date.now() - aiStatus.at < AI_DONE_VISIBLE_MS) {
+    banner.classList.add('ok');
+    close.hidden = false; // se puede cerrar antes de que desaparezca solo
+    const left = aiStatus.skipped ? ` · ${aiStatus.skipped} quedan por el límite diario` : '';
+    $('ai-banner-text').textContent = `✅ Clasificación terminada: ${aiStatus.classified} URL${left}`;
+    banner.hidden = false;
+    bannerTimer = setTimeout(renderAiBanner, AI_DONE_VISIBLE_MS - (Date.now() - aiStatus.at) + 50);
+  } else {
+    banner.hidden = true;
+  }
+  await updateAiButtons();
+}
+
+const AI_DONE_VISIBLE_MS = 15_000;
+
+$('ai-banner-close').addEventListener('click', async () => {
+  const { aiStatus } = await chrome.storage.local.get('aiStatus');
+  if (aiStatus) await chrome.storage.local.set({ aiStatus: { ...aiStatus, dismissed: true } });
+});
 
 async function renderAiStatus() {
   const { aiStatus } = await chrome.storage.local.get('aiStatus');
@@ -601,6 +642,7 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   if (changes.openaiKey) apiKeySet = !!(await getApiKey());
   if (changes.openaiKey || changes.settings) renderSettings();
   if (changes.aiStatus || changes.aiUsage || changes.settings) renderAiStatus();
+  if (changes.aiProgress || changes.aiStatus) renderAiBanner();
   if (changes.saved || changes.settings || changes.classifications || changes.openaiKey) scheduleRefresh();
 });
 document.addEventListener('visibilitychange', () => {
@@ -613,6 +655,7 @@ settings = await getSettings();
 apiKeySet = !!(await getApiKey());
 renderSettings();
 await renderAiStatus();
+await renderAiBanner();
 await checkUiMode();
 await updateSavedCount();
 await loadTabs();

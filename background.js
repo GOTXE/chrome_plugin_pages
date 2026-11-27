@@ -86,6 +86,18 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 chrome.runtime.onStartup.addListener(scheduleAutoClassify);
 
+// Insignia del icono: "…" mientras clasifica y "!" si falló, para que se vea aunque el popup esté cerrado.
+async function updateBadge() {
+  const { aiProgress, aiStatus } = await chrome.storage.local.get(['aiProgress', 'aiStatus']);
+  const running = aiProgress?.running && Date.now() - aiProgress.startedAt < 5 * 60_000;
+  const failed = aiStatus && !aiStatus.ok && !aiStatus.dismissed;
+  await chrome.action.setBadgeText({ text: running ? '…' : failed ? '!' : '' });
+  await chrome.action.setBadgeBackgroundColor({ color: running ? '#5b8def' : '#d93025' });
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (changes.aiProgress || changes.aiStatus)) updateBadge().catch(console.error);
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   // La interfaz pide re-aplicar el modo (al cambiar el ajuste o si detecta que no coincide).
   if (message?.type === 'apply-ui') {

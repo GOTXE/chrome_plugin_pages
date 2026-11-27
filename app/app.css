@@ -109,3 +109,10 @@ dialog h2 { margin: 0 0 6px; font-size: 14px; }
 dialog .actions button { flex: 1; padding: 8px; }
 
 .list .empty { text-align: center; color: var(--muted); padding: 24px; }
+
+/* Aviso de progreso y resultado de la clasificación */
+.banner.ai { background: color-mix(in srgb, #5b8def 22%, transparent); }
+.banner.ai.ok { background: color-mix(in srgb, #2e9d5b 28%, transparent); }
+.banner.ai.err { background: color-mix(in srgb, #d93025 25%, transparent); }
+.banner.ai progress { flex: 0 0 90px; }
+.banner.ai button { border: 0; background: none; color: inherit; padding: 2px 6px; }
