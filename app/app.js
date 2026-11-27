@@ -1,6 +1,10 @@
 import { MIN_CONFIDENCE, selectPending } from '../shared/ai.js';
-import { CATEGORIES, categoryById } from '../shared/categories.js';
-import { addExamples, forgetAll, forgetDomainRule, forgetExample, getExamples, learnedRules } from '../shared/learning.js';
+import {
+  categories, categoryById, folderTitle, getCustomCategories, loadCategories, parseFolderTitle,
+  saveCustomCategories, validateLabel,
+} from '../shared/categories.js';
+import { addExamples, forgetAll, forgetCategory, forgetDomainRule, forgetExample, getExamples, learnedRules } from '../shared/learning.js';
+import { categoryFolderIds, listOwnFolders } from '../shared/sync.js';
 import {
   addSaved, classify, domainOf, getApiKey, getClassifications, getSaved, getSettings, getUsageToday,
   isSavable, normalizeDomain, removeSaved, saveSettings, setApiKey, toMarkdown, urlKey,
@@ -261,7 +265,7 @@ function groupSaved(items, groupBy) {
 
   const list = [...groups.values()];
   if (groupBy === 'category') {
-    const order = (group) => (group.id === 'sin' ? CATEGORIES.length : CATEGORIES.findIndex((c) => c.id === group.id));
+    const order = (group) => (group.id === 'sin' ? categories().length : categories().findIndex((c) => c.id === group.id));
     list.sort((a, b) => order(a) - order(b));
   } else if (groupBy === 'site') {
     list.sort((a, b) => b.items.length - a.items.length || a.label.localeCompare(b.label));
@@ -468,6 +472,133 @@ $('ai-banner-close').addEventListener('click', async () => {
   const { aiStatus } = await chrome.storage.local.get('aiStatus');
   if (aiStatus) await chrome.storage.local.set({ aiStatus: { ...aiStatus, dismissed: true } });
 });
+
+// ---------- Categorías propias ----------
+
+const MIN_LINKS_FOR_SUGGESTION = 3;
+let editingCategory = null;
+
+async function renderCategories() {
+  // Las del usuario primero: las predefinidas son muchas y las suyas quedarían fuera de vista.
+  const ordered = [...categories().filter((category) => category.custom), ...categories().filter((category) => !category.custom)];
+  $('cat-list').replaceChildren(...ordered.map((category) => {
+    const text = `${category.emoji} ${category.label}${category.description ? ` — ${category.description}` : ''}`;
+    const row = el('li', {}, el('span', { className: 'what', textContent: text, title: text }));
+    if (!category.custom) {
+      row.append(el('span', { className: 'muted', textContent: 'predefinida' }));
+      return row;
+    }
+    const edit = el('button', { className: 'icon-btn', textContent: '✏️', title: 'Editar' });
+    const remove = el('button', { className: 'icon-btn', textContent: '✕', title: 'Borrar' });
+    edit.addEventListener('click', () => startEditingCategory(category));
+    remove.addEventListener('click', () => deleteCategory(category));
+    row.append(edit, remove);
+    return row;
+  }));
+  await renderSuggestions();
+}
+
+function resetCategoryForm() {
+  editingCategory = null;
+  for (const id of ['cat-emoji', 'cat-label', 'cat-desc']) $(id).value = '';
+  $('cat-add').textContent = 'Añadir';
+  $('cat-cancel').hidden = true;
+  $('cat-form-title').textContent = 'Añadir una categoría';
+}
+
+function startEditingCategory(category) {
+  editingCategory = category.id;
+  $('cat-emoji').value = category.emoji;
+  $('cat-label').value = category.label;
+  $('cat-desc').value = category.description ?? '';
+  $('cat-add').textContent = 'Guardar cambios';
+  $('cat-cancel').hidden = false;
+  $('cat-form-title').textContent = `Editar "${category.label}"`;
+  $('cat-label').focus();
+}
+
+const newCategoryId = () => `u-${crypto.randomUUID().slice(0, 8)}`;
+
+$('cat-add').addEventListener('click', async () => {
+  const label = $('cat-label').value.trim();
+  const error = validateLabel(label, editingCategory);
+  if (error) return toast(error);
+  const emoji = $('cat-emoji').value.trim() || '📁';
+  const description = $('cat-desc').value.trim();
+  const custom = await getCustomCategories();
+
+  if (editingCategory) {
+    const old = custom.find((category) => category.id === editingCategory);
+    const folderIds = await categoryFolderIds(old.id); // antes de cambiar el nombre
+    const updated = { ...old, label, emoji, description };
+    await saveCustomCategories(custom.map((category) => (category.id === old.id ? updated : category)));
+    await loadCategories();
+    // Si no se renombraran, las subcarpetas dejarían de reconocerse y se crearían otras nuevas.
+    for (const id of folderIds) await chrome.bookmarks.update(id, { title: folderTitle(updated) }).catch(console.error);
+    toast('Categoría actualizada');
+  } else {
+    await saveCustomCategories([...custom, { id: newCategoryId(), label, emoji, description }]);
+    await loadCategories();
+    toast(`Categoría "${label}" añadida`);
+  }
+  resetCategoryForm();
+  await renderCategories();
+});
+$('cat-cancel').addEventListener('click', resetCategoryForm);
+
+async function deleteCategory(category) {
+  const cache = await getClassifications();
+  const affected = Object.values(cache).filter((entry) => entry.category === category.id).length;
+  const note = affected ? ` ${affected} enlaces quedarán sin clasificar.` : '';
+  if (!confirm(`¿Borrar la categoría "${category.label}"?${note} Las subcarpetas de marcadores no se borran.`)) return;
+
+  await saveCustomCategories((await getCustomCategories()).filter((entry) => entry.id !== category.id));
+  await loadCategories();
+  const kept = Object.fromEntries(Object.entries(cache).filter(([, entry]) => entry.category !== category.id));
+  await chrome.storage.local.set({ classifications: kept });
+  await forgetCategory(category.id);
+  if (editingCategory === category.id) resetCategoryForm();
+  await renderCategories();
+}
+
+// Subcarpetas propias de "Leer luego" con varios enlaces: se propone convertirlas en categoría.
+async function renderSuggestions() {
+  const ignored = new Set(settings.ignoredFolders);
+  let folders = [];
+  try {
+    folders = (await listOwnFolders()).filter((folder) => folder.count >= MIN_LINKS_FOR_SUGGESTION && !ignored.has(folder.title));
+  } catch (err) {
+    console.error(err);
+  }
+  $('cat-suggestions').hidden = !folders.length;
+  $('settings-badge').hidden = !folders.length;
+  $('settings-badge').textContent = String(folders.length);
+  $('cat-suggest-list').replaceChildren(...folders.map((folder) => {
+    const { emoji, label } = parseFolderTitle(folder.title);
+    const convert = el('button', { textContent: 'Convertir', title: 'Usarla como categoría' });
+    const ignore = el('button', { className: 'icon-btn', textContent: '✕', title: 'No volver a proponerla' });
+    convert.addEventListener('click', async () => {
+      const error = validateLabel(label);
+      if (error) return toast(`"${label}": ${error}`);
+      await saveCustomCategories([...(await getCustomCategories()), { id: newCategoryId(), label, emoji, description: '' }]);
+      await loadCategories();
+      toast(`"${label}" ahora es una categoría`);
+      await renderCategories();
+    });
+    ignore.addEventListener('click', async () => {
+      settings = await saveSettings({ ignoredFolders: [...settings.ignoredFolders, folder.title] });
+      await renderSuggestions();
+    });
+    return el('li', {}, el('span', { className: 'what', textContent: `${emoji} ${label} (${folder.count} enlaces)` }), convert, ignore);
+  }));
+}
+
+let suggestionTimer;
+const scheduleSuggestions = () => {
+  clearTimeout(suggestionTimer);
+  suggestionTimer = setTimeout(renderSuggestions, 600);
+};
+for (const name of ['onCreated', 'onRemoved', 'onMoved', 'onChanged']) chrome.bookmarks[name].addListener(scheduleSuggestions);
 
 // ---------- Lo aprendido ----------
 
@@ -703,6 +834,11 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   if (changes.aiStatus || changes.aiUsage || changes.settings) renderAiStatus();
   if (changes.aiProgress || changes.aiStatus) renderAiBanner();
   if (changes.learned) renderLearned();
+  if (changes.customCategories) {
+    await loadCategories();
+    renderCategories();
+    scheduleRefresh();
+  }
   if (changes.saved || changes.settings || changes.classifications || changes.openaiKey) scheduleRefresh();
 });
 document.addEventListener('visibilitychange', () => {
@@ -712,11 +848,13 @@ document.addEventListener('visibilitychange', () => {
 // ---------- Inicio ----------
 
 settings = await getSettings();
+await loadCategories();
 apiKeySet = !!(await getApiKey());
 renderSettings();
 await renderAiStatus();
 await renderAiBanner();
 await renderLearned();
+await renderCategories();
 await checkUiMode();
 await updateSavedCount();
 await loadTabs();

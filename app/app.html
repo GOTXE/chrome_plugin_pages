@@ -10,7 +10,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" data-view="tabs" aria-selected="true">Pestañas</button>
     <button role="tab" data-view="saved" aria-selected="false">Guardadas <span id="saved-count" class="badge">0</span></button>
-    <button role="tab" data-view="settings" aria-selected="false">Ajustes</button>
+    <button role="tab" data-view="settings" aria-selected="false">Ajustes <span id="settings-badge" class="badge" hidden></span></button>
   </nav>
 
   <div id="mode-banner" class="banner" hidden>
@@ -84,6 +84,25 @@
         </label>
         <p class="hint">Solo se envían el dominio y el título de cada URL, nunca el contenido de la página. Lo ya clasificado no se vuelve a enviar. La clave se guarda únicamente en este navegador y no se sincroniza: pégala en cada uno. Usa una clave de proyecto con límite de gasto.</p>
         <p class="hint" id="ai-status"></p>
+      </fieldset>
+      <fieldset class="stack">
+        <legend>Categorías</legend>
+        <p class="hint">Las predefinidas no se pueden cambiar. Las tuyas se usan al clasificar (la descripción se le explica a la IA) y dan nombre a las subcarpetas de marcadores. Cada categoría propia vive en este navegador: en otro equipo aparecerá como una subcarpeta tuya que puedes convertir en categoría.</p>
+        <ul class="learned-list tall" id="cat-list"></ul>
+        <div id="cat-suggestions" hidden>
+          <h3>Subcarpetas tuyas que podrían ser categorías</h3>
+          <ul class="learned-list" id="cat-suggest-list"></ul>
+        </div>
+        <h3 id="cat-form-title">Añadir una categoría</h3>
+        <div class="cat-form">
+          <input type="text" id="cat-emoji" maxlength="8" placeholder="📁" aria-label="Emoji">
+          <input type="text" id="cat-label" maxlength="40" placeholder="Nombre (p. ej. Recetas)" aria-label="Nombre">
+        </div>
+        <input type="text" id="cat-desc" maxlength="200" placeholder="Qué enlaces entran (opcional, se lo explico a la IA)" aria-label="Descripción">
+        <div class="cat-actions">
+          <button type="button" id="cat-add">Añadir</button>
+          <button type="button" id="cat-cancel" hidden>Cancelar</button>
+        </div>
       </fieldset>
       <fieldset class="stack">
         <legend>Lo aprendido</legend>

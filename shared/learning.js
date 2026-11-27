@@ -44,6 +44,20 @@ export async function forgetDomainRule(domain) {
   await chrome.storage.local.set({ [KEY]: kept });
 }
 
+// Al borrar una categoría del usuario se olvida lo aprendido sobre ella.
+export async function forgetCategory(categoryId) {
+  const kept = [];
+  for (const example of await getExamples()) {
+    if (example.category !== categoryId) {
+      kept.push(example);
+      continue;
+    }
+    const { category, ...rest } = example;
+    if (rest.action) kept.push(rest);
+  }
+  await chrome.storage.local.set({ [KEY]: kept });
+}
+
 export async function forgetAll() {
   await chrome.storage.local.remove(KEY);
 }
