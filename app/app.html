@@ -18,11 +18,18 @@
     <button id="open-panel">Abrir en panel lateral</button>
   </div>
 
+  <div id="ai-banner" class="banner ai" hidden>
+    <span id="ai-banner-text"></span>
+    <progress id="ai-progress" hidden></progress>
+    <button id="ai-banner-close" aria-label="Cerrar aviso" hidden>✕</button>
+  </div>
+
   <main>
     <section id="view-tabs">
       <p class="hint" id="tabs-summary"></p>
       <ul class="list" id="tabs-list"></ul>
       <footer class="actions">
+        <button id="ai-tabs" hidden></button>
         <button id="save-close" class="primary">Guardar y cerrar</button>
       </footer>
     </section>
@@ -33,7 +40,18 @@
         <button id="copy-urls" title="Copiar las URL al portapapeles">Copiar</button>
         <button id="export-md">Exportar .md</button>
       </div>
-      <ul class="list" id="saved-list"></ul>
+      <div class="toolbar">
+        <label class="inline">Agrupar por
+          <select id="group-by">
+            <option value="category">Tipo de contenido</option>
+            <option value="site">Sitio</option>
+            <option value="date">Fecha</option>
+            <option value="none">Sin agrupar</option>
+          </select>
+        </label>
+        <button id="ai-saved" hidden></button>
+      </div>
+      <div class="list" id="saved-list"></div>
     </section>
 
     <section id="view-settings" hidden>
@@ -48,6 +66,24 @@
       <label class="field">Días sin abrir para proponer "leer luego"
         <input type="number" id="idle-days" min="0" max="365">
       </label>
+      <fieldset class="stack">
+        <legend>Clasificación con IA (OpenAI)</legend>
+        <label><input type="checkbox" id="ai-enabled"> Activar la clasificación con IA</label>
+        <label><input type="radio" name="aiMode" value="manual"> Manual: yo pulso el botón y veo antes lo que se envía</label>
+        <label><input type="radio" name="aiMode" value="auto"> Automático: cada URL nueva que se guarda, y las pestañas dudosas al abrir esto</label>
+        <label class="field">Clave de API de OpenAI
+          <input type="password" id="ai-key" autocomplete="off" spellcheck="false" placeholder="sk-...">
+        </label>
+        <button type="button" id="ai-key-clear" hidden>Borrar la clave guardada</button>
+        <label class="field">Modelo
+          <input type="text" id="ai-model" spellcheck="false">
+        </label>
+        <label class="field">Máximo de URL clasificadas por día
+          <input type="number" id="ai-limit" min="0" max="5000">
+        </label>
+        <p class="hint">Solo se envían el dominio y el título de cada URL, nunca el contenido de la página. Lo ya clasificado no se vuelve a enviar. La clave se guarda únicamente en este navegador y no se sincroniza: pégala en cada uno. Usa una clave de proyecto con límite de gasto.</p>
+        <p class="hint" id="ai-status"></p>
+      </fieldset>
       <label class="field">Dominios que nunca se proponen (uno por línea)
         <textarea id="keep-domains" rows="4" placeholder="github.com"></textarea>
       </label>
@@ -56,6 +92,18 @@
       </label>
     </section>
   </main>
+
+  <dialog id="ai-preview">
+    <form method="dialog">
+      <h2>Enviar a OpenAI</h2>
+      <p class="hint" id="ai-preview-summary"></p>
+      <ul class="preview" id="ai-preview-list"></ul>
+      <div class="actions">
+        <button value="cancel">Cancelar</button>
+        <button value="send" class="primary" id="ai-preview-send">Enviar</button>
+      </div>
+    </form>
+  </dialog>
 
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <script type="module" src="app.js"></script>
