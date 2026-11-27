@@ -9,6 +9,10 @@ Extensión Manifest V3 para Brave/Chrome. Guarda como "leer luego" las pestañas
 - Dos hooks refuerzan la regla en local: `.githooks/pre-push` (git; se activa con `git config core.hooksPath .githooks` tras clonar) y `.claude/hooks/block-main-push.sh` (Claude Code, configurado en `.claude/settings.json`).
 - Mensajes de commit en español, con la línea `Co-Authored-By` cuando los redacte Claude.
 
+## Documentación
+
+`docs/` es la documentación para el usuario (y `docs/arquitectura.md` para quien toque el código); el `README.md` es su resumen. **Cuando cambie el comportamiento visible, un ajuste, un permiso o lo que se envía a OpenAI, actualiza `docs/` y el README en el mismo PR.** Las capturas de `docs/img/` salen de la interfaz real con datos de ejemplo inventados (nunca datos personales); si cambia una pantalla, hay que rehacerlas. Los enlaces entre documentos y sus anclajes a secciones se comprueban a mano: tras editar títulos, verifica que no se rompen.
+
 ## Probar
 
 No hay tests ni paso de compilación. En `brave://extensions` (o `chrome://extensions`): modo desarrollador → "Cargar descomprimida" → elegir esta carpeta. Tras cambiar código, recargar la extensión con el botón de la flecha circular. No hace falta "Empaquetar extensión".

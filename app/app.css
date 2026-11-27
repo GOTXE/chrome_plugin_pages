@@ -75,9 +75,9 @@ input[type="search"], input[type="number"], input[type="text"], input[type="pass
   background: transparent; color: inherit;
 }
 
-fieldset { border: 1px solid var(--border); border-radius: 6px; display: flex; gap: 16px; flex-wrap: wrap; }
+fieldset { border: 1px solid var(--border); border-radius: 6px; display: flex; gap: 16px; flex-wrap: wrap; min-width: 0; }
 .field { display: flex; flex-direction: column; gap: 4px; }
-#view-settings { overflow-y: auto; }
+#view-settings { overflow-y: auto; overflow-x: hidden; }
 
 #toast {
   position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
@@ -85,6 +85,7 @@ fieldset { border: 1px solid var(--border); border-radius: 6px; display: flex; g
 }
 
 fieldset.stack { flex-direction: column; gap: 8px; }
+fieldset.stack > * { min-width: 0; } /* sin esto una fila larga ensancha todo Ajustes */
 .toolbar select { font: inherit; }
 label.inline { display: flex; align-items: center; gap: 6px; flex: 1; }
 
