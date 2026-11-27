@@ -19,3 +19,14 @@ const BY_ID = new Map(CATEGORIES.map((category) => [category.id, category]));
 export function categoryById(id) {
   return BY_ID.get(id);
 }
+
+// Nombre de la subcarpeta de marcadores de una categoría: "📰 Noticias".
+export function folderTitle(category) {
+  return `${category.emoji} ${category.label}`;
+}
+
+// Reconoce una subcarpeta por su nombre aunque se le haya quitado o cambiado el emoji.
+export function categoryFromFolderTitle(title) {
+  const name = String(title).replace(/^[^\p{L}\p{N}]+/u, '').trim().toLowerCase();
+  return CATEGORIES.find((category) => category.label.toLowerCase() === name);
+}

@@ -2,6 +2,7 @@ export const DEFAULTS = {
   uiMode: 'popup', // 'popup' | 'panel'
   idleDays: 3,
   syncBookmarks: true,
+  organizeBookmarks: false, // subcarpetas por tipo de contenido dentro de la carpeta de marcadores
   keepDomains: [],
   laterDomains: [],
   savedGroupBy: 'category', // 'category' | 'site' | 'date' | 'none'

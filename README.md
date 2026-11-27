@@ -16,6 +16,7 @@ Extensión para Brave, Chrome y otros navegadores Chromium que ayuda a no acumul
 - Clasificación opcional con IA (OpenAI): etiqueta cada enlace por tipo de contenido (blog, noticias, tutorial, referencia…), propone qué pestañas dudosas guardar y agrupa la lista de guardadas por esos tipos. Desactivada por defecto.
 - Funciona como popup o como panel lateral, a elegir en Ajustes. La lista se actualiza sola.
 - Sincroniza las guardadas entre dispositivos mediante una carpeta de marcadores "Leer luego", que viaja con Brave Sync o Chrome Sync.
+- Opcional: organiza esa carpeta en subcarpetas por tipo de contenido (📰 Noticias, 🧭 Tutoriales…). Si mueves un enlace a otra subcarpeta, se toma como una corrección tuya. Desactivado por defecto.
 
 ## Instalación
 
