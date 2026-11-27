@@ -39,6 +39,14 @@ Comprobación de sintaxis rápida: `node --check` sobre cada `.js`.
 - Texto de la interfaz en español. Construir el DOM con `textContent`/`createElement`, nunca `innerHTML` con títulos o URL de páginas.
 - Permisos mínimos y justificados: `tabs`, `storage`, `unlimitedStorage`, `sidePanel`, `bookmarks`, `favicon`. Evitar `<all_urls>` salvo que una función lo exija.
 
+## Categorías propias (`shared/categories.js`)
+
+- La lista vigente es `categories()` = `BUILTIN_CATEGORIES` + `customCategories` de `storage.local` (`{ id, label, emoji, description }`, id `u-xxxxxxxx` estable aunque se renombre). El módulo la mantiene al día con `storage.onChanged`; los contextos que la usen sin haber leído storage (service worker) deben llamar a `loadCategories()` antes (ya lo hacen `run()` de sync y `classifyNow` de ai).
+- Nunca asumir la lista fija: el esquema JSON y el prompt de OpenAI se construyen en cada petición con `categories()`. La `description` del usuario es lo que se le explica al modelo.
+- Los nombres no pueden repetirse (sin distinguir mayúsculas) con ninguna categoría (`validateLabel`).
+- **Editar** una categoría renombra sus subcarpetas de marcadores (`categoryFolderIds` antes de guardar); si no, dejarían de reconocerse y se crearían otras. **Borrar** olvida su clasificación y sus ejemplos, pero no toca las subcarpetas: pasan a ser carpetas propias del usuario.
+- **Las categorías propias son locales** (no se sincronizan). En otro equipo, la subcarpeta aparece como carpeta propia y `listOwnFolders` la propone como categoría si tiene >= 3 enlaces (`MIN_LINKS_FOR_SUGGESTION`); "Ignorar" se guarda en `settings.ignoredFolders`. Convertirla nombra la categoría como la carpeta (`parseFolderTitle` separa el emoji) y sus enlaces se adoptan con `source: 'sync'`, sin contar como correcciones.
+
 ## Aprendizaje (`shared/learning.js`)
 
 No se entrena nada: se guarda una lista corta (`learned`, máx. 200, un ejemplo por URL) de correcciones del usuario con dominio y título (nunca la ruta), y se usa de dos formas, ambas gobernadas por `settings.aiLearning`:
@@ -67,8 +75,7 @@ Ajuste `organizeBookmarks` (apagado por defecto: reorganiza los marcadores del u
 - **Caché:** `classifications` (por `urlKey`) evita reenviar lo ya clasificado. `aiUsage` limita las URL por día (`aiDailyLimit`). `aiStatus` guarda el último resultado o error y `aiProgress` el avance (lotes de 20). La interfaz los lee de storage —no de la respuesta del mensaje— para mostrar un aviso superior con barra de progreso, el resultado (se cierra solo a los 15 s o con ✕) y los errores (solo con ✕); el service worker pone además una insignia en el icono (`…` clasificando, `!` error) para que se vea con el popup cerrado. Al terminar, `aiStatus` y `aiProgress` se escriben en una sola llamada para que la interfaz no vea estados intermedios.
 - **La ejecuta el service worker** (mensaje `classify`), no el popup, para que no se corte al cerrarlo. Las peticiones se encolan en `classifyUrls`.
 - `settings.aiBaseUrl` no sale en la interfaz: permite apuntar a un servidor falso en pruebas (un servidor local que imite `/v1/responses`) sin gastar dinero.
-- **Categorías:** la lista está en `shared/categories.js`; el código las recibe como dato. Está previsto que el usuario pueda añadir las suyas (fase 3, pendiente).
 
 ## Fuera de alcance por ahora
 
-Guardar el contenido de los artículos (scraping) se descartó. Categorías definidas por el usuario y proponer como categoría las subcarpetas propias con varios enlaces: pendientes (fase 3), no añadirlos sin que se pida.
+Guardar el contenido de los artículos (scraping) se descartó. Nada pendiente de lo hablado. Ideas sin pedir: sincronizar las categorías propias entre dispositivos, ocultar categorías predefinidas.

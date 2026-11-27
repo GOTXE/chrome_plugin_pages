@@ -1,4 +1,4 @@
-import { CATEGORIES, categoryById } from './categories.js';
+import { categories, categoryById, loadCategories } from './categories.js';
 import { getExamples, learnedAction, learnedRules, pickExamples } from './learning.js';
 import {
   addUsage, domainOf, getApiKey, getClassifications, getSettings, getUsageToday,
@@ -31,7 +31,8 @@ export function selectPending(entries, settings, cache) {
   return items;
 }
 
-const SCHEMA = {
+// Se construye en cada petición porque las categorías del usuario pueden haber cambiado.
+const buildSchema = () => ({
   type: 'object',
   properties: {
     items: {
@@ -40,7 +41,7 @@ const SCHEMA = {
         type: 'object',
         properties: {
           i: { type: 'integer' },
-          category: { type: 'string', enum: CATEGORIES.map((category) => category.id) },
+          category: { type: 'string', enum: categories().map((category) => category.id) },
           action: { type: 'string', enum: ['keep', 'later'] },
           confidence: { type: 'number' },
         },
@@ -51,7 +52,7 @@ const SCHEMA = {
   },
   required: ['items'],
   additionalProperties: false,
-};
+});
 
 function describeExample(example) {
   const result = [];
@@ -65,7 +66,7 @@ function buildRequest(items, settings, examples = []) {
     'You classify web pages that a user keeps open in their browser, using only the domain and the title.',
     'For every item choose:',
     '- category: the type of content, one of:',
-    ...CATEGORIES.map((category) => `  - ${category.id}: ${category.hint}`),
+    ...categories().map((category) => `  - ${category.id}: ${category.hint}`),
     '- action: "later" if it looks like an article, video, thread or other content meant to be read or watched later; "keep" if it looks like a tool, dashboard, mail, form, search, or something the user probably needs open right now.',
     '- confidence: a number from 0 to 1.',
     'Prefer the type of content over the website (a tutorial hosted on a blog is "tutorial").',
@@ -86,7 +87,7 @@ function buildRequest(items, settings, examples = []) {
     max_output_tokens: 8000,
     instructions,
     input: JSON.stringify(items.map((item, i) => ({ i, domain: item.domain, title: item.title }))),
-    text: { format: { type: 'json_schema', name: 'tab_classification', strict: true, schema: SCHEMA } },
+    text: { format: { type: 'json_schema', name: 'tab_classification', strict: true, schema: buildSchema() } },
   };
 }
 
@@ -136,11 +137,11 @@ async function classifyBatch(items, settings, apiKey, examples) {
     throw err instanceof AiError ? err : new AiError('La respuesta de OpenAI no era un JSON válido.');
   }
 
-  const categories = new Set(CATEGORIES.map((category) => category.id));
+  const validCategories = new Set(categories().map((category) => category.id));
   const results = {};
   for (const result of parsed.items ?? []) {
     const item = items[result.i];
-    if (!item || !categories.has(result.category) || !['keep', 'later'].includes(result.action)) continue;
+    if (!item || !validCategories.has(result.category) || !['keep', 'later'].includes(result.action)) continue;
     results[item.key] = {
       category: result.category,
       action: result.action,
@@ -164,6 +165,7 @@ async function ensureAccess(settings) {
 async function classifyNow(entries) {
   const settings = await getSettings();
   if (!settings.aiEnabled) throw new AiError('La clasificación con IA está desactivada.');
+  await loadCategories(); // las categorías del usuario
   const apiKey = await getApiKey();
   if (!apiKey) throw new AiError('Falta la clave de API de OpenAI (Ajustes).');
 

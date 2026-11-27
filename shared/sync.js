@@ -1,4 +1,4 @@
-import { categoryById, categoryFromFolderTitle, folderTitle } from './categories.js';
+import { categoryById, categoryFromFolderTitle, folderTitle, loadCategories } from './categories.js';
 import { addExamples } from './learning.js';
 import { domainOf, getClassifications, getSaved, getSettings, saveClassifications, urlKey } from './store.js';
 
@@ -91,6 +91,27 @@ async function readTree(folderId) {
   return { entries, subfolders };
 }
 
+// Para la interfaz: subcarpetas de "Leer luego" que no son de ninguna categoría, con cuántos enlaces
+// tienen. Sirven para proponer convertirlas en categorías propias.
+export async function listOwnFolders() {
+  await loadCategories();
+  const { folders } = await findFolders();
+  if (!folders.length) return [];
+  const [tree] = await chrome.bookmarks.getSubTree(folders[0].id);
+  return (tree.children ?? [])
+    .filter((node) => !node.url && !categoryFromFolderTitle(node.title))
+    .map((node) => ({ id: node.id, title: node.title, count: (node.children ?? []).filter((child) => child.url).length }));
+}
+
+// Ids de las subcarpetas que hoy se reconocen como de esta categoría (para renombrarlas si cambia).
+export async function categoryFolderIds(categoryId) {
+  await loadCategories();
+  const { folders } = await findFolders();
+  if (!folders.length) return [];
+  const { subfolders } = await readTree(folders[0].id);
+  return subfolders.filter((sub) => sub.category.id === categoryId).map((sub) => sub.node.id);
+}
+
 // Dos dispositivos pueden crear a la vez la subcarpeta del mismo tipo: se unen en la más antigua.
 async function mergeCategoryFolders(subfolders) {
   const byCategory = Map.groupBy(subfolders, (sub) => sub.category.id);
@@ -112,6 +133,7 @@ async function mergeCategoryFolders(subfolders) {
 async function run() {
   const settings = await getSettings();
   if (!settings.syncBookmarks) return;
+  await loadCategories(); // las categorías del usuario dan nombre a las subcarpetas
 
   const saved = await getSaved();
   const { other, folders } = await findFolders();

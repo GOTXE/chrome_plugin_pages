@@ -54,7 +54,7 @@ for (const name of ['onCreated', 'onRemoved', 'onChanged', 'onMoved', 'onImportE
   chrome.bookmarks[name].addListener(requestSync);
 }
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && (changes.saved || changes.settings || changes.classifications)) requestSync();
+  if (area === 'local' && (changes.saved || changes.settings || changes.classifications || changes.customCategories)) requestSync();
 });
 chrome.runtime.onStartup.addListener(requestSync);
 requestSync();
