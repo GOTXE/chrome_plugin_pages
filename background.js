@@ -1,4 +1,5 @@
-import { getSettings } from './shared/store.js';
+import { classifyUrls } from './shared/ai.js';
+import { getSaved, getSettings } from './shared/store.js';
 import { requestSync } from './shared/sync.js';
 
 const POPUP_PATH = 'app/app.html?mode=popup';
@@ -59,9 +60,43 @@ chrome.runtime.onStartup.addListener(requestSync);
 requestSync();
 
 safeApply(); // cada vez que arranca el servicio, no solo en instalación o inicio
-// La interfaz pide re-aplicar el modo (al cambiar el ajuste o si detecta que no coincide).
-chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type === 'apply-ui') safeApply();
+// Clasificación con IA. La ejecuta el servicio, no el popup, para que no se corte si este se cierra.
+async function runClassification(entries) {
+  try {
+    return await classifyUrls(entries);
+  } catch (err) {
+    console.error('Clasificación con IA:', err);
+    return { error: err.message };
+  }
+}
+
+// Modo automático: cada URL nueva que entra en guardadas (también las que llegan por Sync).
+let autoTimer;
+function scheduleAutoClassify() {
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(async () => {
+    const settings = await getSettings();
+    if (!settings.aiEnabled || settings.aiMode !== 'auto') return;
+    const saved = await getSaved();
+    await runClassification(saved.map((item) => ({ url: item.url, title: item.title })));
+  }, 1500);
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.saved) scheduleAutoClassify();
+});
+chrome.runtime.onStartup.addListener(scheduleAutoClassify);
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  // La interfaz pide re-aplicar el modo (al cambiar el ajuste o si detecta que no coincide).
+  if (message?.type === 'apply-ui') {
+    safeApply();
+    return false;
+  }
+  if (message?.type === 'classify' && Array.isArray(message.entries)) {
+    runClassification(message.entries).then(sendResponse);
+    return true; // respuesta asíncrona
+  }
+  return false;
 });
 chrome.runtime.onInstalled.addListener(safeApply);
 chrome.runtime.onStartup.addListener(safeApply);

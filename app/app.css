@@ -70,7 +70,7 @@ button { font: inherit; cursor: pointer; }
 .primary { flex: 1; padding: 8px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font-weight: 600; }
 .primary:disabled { opacity: .5; cursor: default; }
 
-input[type="search"], input[type="number"], textarea {
+input[type="search"], input[type="number"], input[type="text"], input[type="password"], textarea {
   font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
   background: transparent; color: inherit;
 }
@@ -83,3 +83,29 @@ fieldset { border: 1px solid var(--border); border-radius: 6px; display: flex; g
   position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
   background: #222; color: #fff; padding: 6px 12px; border-radius: 6px;
 }
+
+fieldset.stack { flex-direction: column; gap: 8px; }
+.toolbar select { font: inherit; }
+label.inline { display: flex; align-items: center; gap: 6px; flex: 1; }
+
+/* Grupos de la lista de guardadas */
+.group-block { border-bottom: 1px solid var(--border); }
+.group-block > summary {
+  position: sticky; top: 0; z-index: 1; background: Canvas; cursor: pointer;
+  padding: 6px 4px; font-weight: 600; font-size: 12px;
+}
+.group-block > summary .count { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.sublist { list-style: none; margin: 0; padding: 0; }
+
+/* Etiqueta de categoría */
+.tag.cat { background: color-mix(in srgb, #5b8def 25%, transparent); color: inherit; }
+
+/* Vista previa de lo que se envía a OpenAI */
+dialog { max-width: 92vw; border: 1px solid var(--border); border-radius: 8px; color: inherit; background: Canvas; }
+dialog::backdrop { background: rgb(0 0 0 / 40%); }
+dialog h2 { margin: 0 0 6px; font-size: 14px; }
+.preview { list-style: none; margin: 8px 0; padding: 0; max-height: 220px; overflow-y: auto; font-size: 12px; }
+.preview li { padding: 2px 0; border-bottom: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+dialog .actions button { flex: 1; padding: 8px; }
+
+.list .empty { text-align: center; color: var(--muted); padding: 24px; }
