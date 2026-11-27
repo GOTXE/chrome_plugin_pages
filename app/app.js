@@ -1,4 +1,4 @@
-import { MIN_CONFIDENCE, OPENAI_ORIGIN, selectPending } from '../shared/ai.js';
+import { MIN_CONFIDENCE, selectPending } from '../shared/ai.js';
 import { CATEGORIES, categoryById } from '../shared/categories.js';
 import {
   addSaved, classify, domainOf, getApiKey, getClassifications, getSaved, getSettings, getUsageToday,
@@ -518,18 +518,9 @@ document.querySelectorAll('input[name="uiMode"]').forEach((radio) => {
 });
 
 $('ai-enabled').addEventListener('change', async () => {
-  const wanted = $('ai-enabled').checked;
-  // chrome.permissions.request necesita el gesto del usuario: debe ser lo primero que se espera.
-  if (wanted && new URL(settings.aiBaseUrl).origin === OPENAI_ORIGIN) {
-    const granted = await chrome.permissions.request({ origins: [`${OPENAI_ORIGIN}/*`] });
-    if (!granted) {
-      $('ai-enabled').checked = false;
-      toast('Sin permiso para api.openai.com no se puede activar la IA');
-      return;
-    }
-  }
-  settings = await saveSettings({ aiEnabled: wanted });
+  settings = await saveSettings({ aiEnabled: $('ai-enabled').checked });
   await updateAiButtons();
+  await autoClassify();
 });
 document.querySelectorAll('input[name="aiMode"]').forEach((radio) => {
   radio.addEventListener('change', async () => {

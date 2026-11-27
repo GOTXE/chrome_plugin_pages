@@ -41,7 +41,7 @@ Todo se guarda en local en el navegador. Los marcadores solo salen del equipo si
 
 La clasificación con IA es opcional y está desactivada por defecto. Si la activas, la extensión envía a OpenAI **solo el dominio y el título** de cada URL (nunca la ruta, los parámetros ni el contenido de la página), pidiendo que no conserve la respuesta. En modo manual ves antes la lista exacta de lo que se enviará. La clave de API se guarda únicamente en el navegador donde la pegas y no se sincroniza; usa una clave de proyecto con límite de gasto.
 
-Permisos que pide: `tabs` (leer título y URL), `storage` y `unlimitedStorage` (guardar la lista), `sidePanel` (modo panel), `bookmarks` (sincronización), `favicon` (iconos de las guardadas) y, solo si activas la IA, acceso a `api.openai.com` (permiso opcional que se pide en ese momento).
+Permisos que pide: `tabs` (leer título y URL), `storage` y `unlimitedStorage` (guardar la lista), `sidePanel` (modo panel), `bookmarks` (sincronización), `favicon` (iconos de las guardadas) y acceso a `api.openai.com` (solo se usa si activas la IA y pones tu clave).
 
 ## Desarrollo
 

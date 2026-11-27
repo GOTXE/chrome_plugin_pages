@@ -136,12 +136,13 @@ async function classifyBatch(items, settings, apiKey) {
   return results;
 }
 
-// El permiso para api.openai.com es opcional y lo pide la interfaz al activar la IA.
+// El acceso a api.openai.com viene en el manifest, pero el usuario puede restringirlo desde los
+// detalles de la extensión ("acceso al sitio").
 async function ensureAccess(settings) {
   const origin = new URL(settings.aiBaseUrl).origin;
   if (origin !== OPENAI_ORIGIN) return; // servidor de pruebas
   if (!(await chrome.permissions.contains({ origins: [`${origin}/*`] }))) {
-    throw new AiError('Falta el permiso para conectar con api.openai.com. Desactiva y vuelve a activar la IA en Ajustes.');
+    throw new AiError('La extensión no tiene acceso a api.openai.com. En los detalles de la extensión, permite el acceso al sitio.');
   }
 }
 
