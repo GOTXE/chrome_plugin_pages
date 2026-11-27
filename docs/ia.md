@@ -16,6 +16,8 @@ Usa la API de **OpenAI** (`POST /v1/responses`, con salida JSON estricta). Es la
 2. En **Ajustes → Clasificación con IA**, pega la clave y marca **Activar la clasificación con IA**.
 3. Elige el modo, [manual o automático](#modos).
 
+![Ajustes de la clasificación con IA](img/ajustes-ia.png)
+
 La clave se guarda **solo en el navegador donde la pegas**. No se sincroniza: pégala en cada navegador donde quieras usar la IA. El campo nunca la muestra de nuevo; para cambiarla, escribe otra.
 
 ### El modelo

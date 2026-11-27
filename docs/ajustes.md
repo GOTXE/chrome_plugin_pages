@@ -2,6 +2,10 @@
 
 Todos los ajustes son **locales**: se guardan en el navegador y perfil donde los cambias, y no se sincronizan. Se aplican al momento, sin botón de guardar.
 
+![Pantalla de Ajustes](img/ajustes.png)
+
+*En la captura, la sincronización con marcadores está desactivada, para no tocar marcadores en una prueba.*
+
 ## Interfaz
 
 | Ajuste | Valores | Por defecto |
