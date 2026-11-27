@@ -30,26 +30,59 @@ export function requestSync() {
   return queue;
 }
 
-async function findFolder(create) {
+async function findFolders() {
   const [root] = await chrome.bookmarks.getTree();
   const other = root.children.find((node) => node.folderType === 'other') ?? root.children[1];
-  const existing = other.children?.find((node) => !node.url && node.title === FOLDER_TITLE);
-  if (existing || !create) return existing;
-  return chrome.bookmarks.create({ parentId: other.id, title: FOLDER_TITLE });
+  const folders = (other.children ?? []).filter((node) => !node.url && node.title === FOLDER_TITLE);
+  // Todos los dispositivos deben elegir la misma carpeta principal: la más antigua.
+  folders.sort((a, b) => (a.dateAdded ?? 0) - (b.dateAdded ?? 0));
+  return { other, folders };
+}
+
+// Si hay varias carpetas "Leer luego" (p. ej. una creada en un dispositivo antes de que
+// llegara la de otro), se pasan todos los enlaces a la principal y se borran las demás.
+async function mergeFolders(folders) {
+  const [primary, ...extras] = folders;
+  if (!extras.length) return primary;
+
+  const known = new Set();
+  for (const node of await chrome.bookmarks.getChildren(primary.id)) {
+    if (node.url) known.add(urlKey(node.url));
+  }
+  for (const extra of extras) {
+    for (const node of await chrome.bookmarks.getChildren(extra.id)) {
+      if (!node.url) continue;
+      const key = urlKey(node.url);
+      if (known.has(key)) await chrome.bookmarks.remove(node.id);
+      else {
+        known.add(key);
+        await chrome.bookmarks.move(node.id, { parentId: primary.id });
+      }
+    }
+    await chrome.bookmarks.removeTree(extra.id);
+  }
+  return primary;
 }
 
 async function run() {
   const settings = await getSettings();
   if (!settings.syncBookmarks) return;
 
-  let folder = await findFolder(false);
+  const saved = await getSaved();
+  const { other, folders } = await findFolders();
+
+  // La carpeta no se crea hasta que hay algo que subir: si se creara vacía al arrancar, y la
+  // de otro dispositivo llegara después, quedarían dos.
+  if (!folders.length && !saved.length) return;
+
   // Si la carpeta no existía no se sabe qué se borró: se vuelve a subir lo local sin borrar nada.
-  const folderWasMissing = !folder;
-  if (!folder) folder = await findFolder(true);
+  const folderWasMissing = !folders.length;
+  const folder = folders.length
+    ? await mergeFolders(folders)
+    : await chrome.bookmarks.create({ parentId: other.id, title: FOLDER_TITLE });
 
   const { syncedKeys = [] } = await chrome.storage.local.get('syncedKeys');
   const synced = folderWasMissing ? new Set() : new Set(syncedKeys);
-  const saved = await getSaved();
   const children = await chrome.bookmarks.getChildren(folder.id);
 
   const marks = new Map();
