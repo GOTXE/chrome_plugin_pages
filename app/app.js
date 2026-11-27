@@ -468,6 +468,7 @@ function renderSettings() {
   }
   $('idle-days').value = settings.idleDays;
   $('sync-bookmarks').checked = settings.syncBookmarks;
+  $('organize-bookmarks').checked = settings.organizeBookmarks;
   $('keep-domains').value = settings.keepDomains.join('\n');
   $('later-domains').value = settings.laterDomains.join('\n');
   $('group-by').value = settings.savedGroupBy;
@@ -596,6 +597,9 @@ $('ai-limit').addEventListener('change', async () => {
   await renderAiStatus();
 });
 
+$('organize-bookmarks').addEventListener('change', async () => {
+  settings = await saveSettings({ organizeBookmarks: $('organize-bookmarks').checked });
+});
 $('sync-bookmarks').addEventListener('change', async () => {
   settings = await saveSettings({ syncBookmarks: $('sync-bookmarks').checked });
 });

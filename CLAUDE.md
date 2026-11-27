@@ -32,6 +32,15 @@ Comprobación de sintaxis rápida: `node --check` sobre cada `.js`.
 - Texto de la interfaz en español. Construir el DOM con `textContent`/`createElement`, nunca `innerHTML` con títulos o URL de páginas.
 - Permisos mínimos y justificados: `tabs`, `storage`, `unlimitedStorage`, `sidePanel`, `bookmarks`, `favicon`. Evitar `<all_urls>` salvo que una función lo exija.
 
+## Subcarpetas por tipo en los marcadores
+
+Ajuste `organizeBookmarks` (apagado por defecto: reorganiza los marcadores del usuario). Dentro de "Leer luego" hay una subcarpeta por categoría, con el nombre `folderTitle()` (emoji + etiqueta, p. ej. "📰 Noticias").
+- **Manda la carpeta, no la IA.** Un enlace que ya está en una subcarpeta de categoría no se mueve nunca, y esa subcarpeta se adopta como su categoría en la caché (`source: 'folder'`). Así las categorías viajan entre dispositivos sin volver a pagar la clasificación, y mover un marcador a mano cuenta como corrección del usuario (base del aprendizaje futuro). Solo se mueven los enlaces sueltos en la raíz cuya categoría ya se conoce.
+- Las subcarpetas con otro nombre son del usuario: sus enlaces cuentan como guardadas pero no se tocan.
+- La sincronización lee el árbol completo (`readTree`), no solo los hijos directos. Las carpetas "Leer luego" duplicadas se unen conservando sus subcarpetas, y las subcarpetas de categoría duplicadas (dos dispositivos creándolas a la vez) se unen en la más antigua.
+- La carpeta de categoría se crea al mover algo a ella; las vacías no se borran (otro dispositivo podría estar moviendo algo en ese momento).
+- Mover o adoptar dispara más pasadas de `requestSync` (`onMoved`, cambios en `classifications`): son idempotentes, no quitar esa propiedad.
+
 ## Clasificación con IA (OpenAI)
 
 - **Solo OpenAI**, con `POST /v1/responses` y salida JSON estricta (`text.format` con `json_schema`). Modelo por defecto `gpt-6-luna`, configurable en Ajustes. Antes de tocar nombres de modelo o la forma de la API, comprobar la documentación vigente.

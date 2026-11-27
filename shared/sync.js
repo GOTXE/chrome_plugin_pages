@@ -1,4 +1,5 @@
-import { domainOf, getSaved, getSettings, urlKey } from './store.js';
+import { categoryById, categoryFromFolderTitle, folderTitle } from './categories.js';
+import { domainOf, getClassifications, getSaved, getSettings, saveClassifications, urlKey } from './store.js';
 
 // Sincroniza la lista guardada con una carpeta de marcadores ("Leer luego"), que el
 // navegador ya sincroniza entre dispositivos (Brave Sync / Chrome Sync).
@@ -51,7 +52,11 @@ async function mergeFolders(folders) {
   }
   for (const extra of extras) {
     for (const node of await chrome.bookmarks.getChildren(extra.id)) {
-      if (!node.url) continue;
+      if (!node.url) {
+        // Las subcarpetas de categoría se pasan tal cual; se unen después con las del mismo tipo.
+        await chrome.bookmarks.move(node.id, { parentId: primary.id });
+        continue;
+      }
       const key = urlKey(node.url);
       if (known.has(key)) await chrome.bookmarks.remove(node.id);
       else {
@@ -62,6 +67,45 @@ async function mergeFolders(folders) {
     await chrome.bookmarks.removeTree(extra.id);
   }
   return primary;
+}
+
+// Enlaces de la carpeta y de sus subcarpetas. `category` es la categoría de la subcarpeta en la
+// que está (null si está suelto o en una subcarpeta que no es de categoría, que se respeta).
+async function readTree(folderId) {
+  const [tree] = await chrome.bookmarks.getSubTree(folderId);
+  const entries = [];
+  const subfolders = [];
+  const walk = (node, category) => {
+    for (const child of node.children ?? []) {
+      if (child.url) {
+        entries.push({ node: child, category });
+        continue;
+      }
+      const found = categoryFromFolderTitle(child.title);
+      if (node.id === folderId && found) subfolders.push({ node: child, category: found });
+      walk(child, found?.id ?? category);
+    }
+  };
+  walk(tree, null);
+  return { entries, subfolders };
+}
+
+// Dos dispositivos pueden crear a la vez la subcarpeta del mismo tipo: se unen en la más antigua.
+async function mergeCategoryFolders(subfolders) {
+  const byCategory = Map.groupBy(subfolders, (sub) => sub.category.id);
+  let changed = false;
+  for (const group of byCategory.values()) {
+    if (group.length < 2) continue;
+    const [primary, ...extras] = [...group].sort((a, b) => (a.node.dateAdded ?? 0) - (b.node.dateAdded ?? 0));
+    for (const extra of extras) {
+      for (const child of await chrome.bookmarks.getChildren(extra.node.id)) {
+        await chrome.bookmarks.move(child.id, { parentId: primary.node.id });
+      }
+      await chrome.bookmarks.removeTree(extra.node.id);
+    }
+    changed = true;
+  }
+  return changed;
 }
 
 async function run() {
@@ -83,15 +127,30 @@ async function run() {
 
   const { syncedKeys = [] } = await chrome.storage.local.get('syncedKeys');
   const synced = folderWasMissing ? new Set() : new Set(syncedKeys);
-  const children = await chrome.bookmarks.getChildren(folder.id);
+  const organize = settings.organizeBookmarks;
+  let tree = await readTree(folder.id);
+  if (organize && (await mergeCategoryFolders(tree.subfolders))) tree = await readTree(folder.id);
 
-  const marks = new Map();
-  for (const node of children) {
-    if (!/^https?:/i.test(node.url || '')) continue;
-    const key = urlKey(node.url);
-    if (marks.has(key)) await chrome.bookmarks.remove(node.id); // duplicado creado desde dos dispositivos
-    else marks.set(key, node);
+  // Un mismo enlace puede aparecer en varias carpetas (p. ej. creado desde dos dispositivos):
+  // se conserva uno, preferentemente el que ya está en una subcarpeta de categoría.
+  const marks = new Map(); // clave de URL -> { node, category }
+  const ordered = [...tree.entries].sort((a, b) => Number(!a.category) - Number(!b.category));
+  for (const entry of ordered) {
+    if (!/^https?:/i.test(entry.node.url || '')) continue;
+    const key = urlKey(entry.node.url);
+    if (marks.has(key)) await chrome.bookmarks.remove(entry.node.id);
+    else marks.set(key, entry);
   }
+
+  const categoryFolders = new Map(tree.subfolders.map((sub) => [sub.category.id, sub.node]));
+  async function folderFor(categoryId) {
+    if (!categoryFolders.has(categoryId)) {
+      const created = await chrome.bookmarks.create({ parentId: folder.id, title: folderTitle(categoryById(categoryId)) });
+      categoryFolders.set(categoryId, created);
+    }
+    return categoryFolders.get(categoryId);
+  }
+  const classifications = organize ? await getClassifications() : {};
 
   const local = new Map(saved.map((item) => [urlKey(item.url), item]));
   const inBoth = new Set();
@@ -102,12 +161,15 @@ async function run() {
     if (marks.has(key)) inBoth.add(key);
     else if (synced.has(key)) drop.add(key); // borrada en otro dispositivo
     else {
-      await chrome.bookmarks.create({ parentId: folder.id, title: item.title, url: item.url });
+      // Si ya se conoce su categoría, el marcador nace en su subcarpeta.
+      const category = organize ? classifications[key]?.category : null;
+      const parent = category && categoryById(category) ? await folderFor(category) : folder;
+      await chrome.bookmarks.create({ parentId: parent.id, title: item.title, url: item.url });
       inBoth.add(key);
     }
   }
 
-  for (const [key, node] of marks) {
+  for (const [key, { node }] of marks) {
     if (local.has(key)) continue;
     if (synced.has(key)) {
       await chrome.bookmarks.remove(node.id); // borrada aquí
@@ -132,4 +194,24 @@ async function run() {
     await chrome.storage.local.set({ saved: merged });
   }
   await chrome.storage.local.set({ syncedKeys: [...inBoth] });
+
+  if (organize) await organizeByCategory(marks, folder, classifications, folderFor);
+}
+
+// Manda la carpeta, no la IA: lo que ya está en una subcarpeta de categoría se adopta como su
+// categoría (así las categorías viajan entre dispositivos y las correcciones del usuario cuentan)
+// y no se mueve nunca. Solo se mueven los enlaces sueltos cuya categoría ya se conoce.
+async function organizeByCategory(marks, folder, classifications, folderFor) {
+  const adopted = {};
+  for (const [key, { node, category }] of marks) {
+    if (!category) {
+      const known = classifications[key]?.category;
+      if (known && categoryById(known) && node.parentId === folder.id) {
+        await chrome.bookmarks.move(node.id, { parentId: (await folderFor(known)).id });
+      }
+    } else if (classifications[key]?.category !== category) {
+      adopted[key] = { category, action: 'later', confidence: 1, at: Date.now(), source: 'folder' };
+    }
+  }
+  if (Object.keys(adopted).length) await saveClassifications(adopted);
 }
