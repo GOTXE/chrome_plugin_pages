@@ -8,6 +8,9 @@
 
 * { box-sizing: border-box; }
 
+/* Sin esto, cualquier regla con `display` (p. ej. .banner) anula el atributo hidden. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   display: flex;
@@ -30,6 +33,12 @@ main > section:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direc
   background: none; color: inherit; font: inherit; cursor: pointer;
 }
 .tabs button[aria-selected="true"] { border-bottom-color: var(--accent); font-weight: 600; }
+
+.banner {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: color-mix(in srgb, #f5a623 25%, transparent); border-bottom: 1px solid var(--border);
+}
+.banner span { flex: 1; }
 
 .badge { background: var(--border); border-radius: 9px; padding: 0 6px; font-size: 11px; }
 

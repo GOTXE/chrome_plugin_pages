@@ -13,10 +13,14 @@
     <button role="tab" data-view="settings" aria-selected="false">Ajustes</button>
   </nav>
 
+  <div id="mode-banner" class="banner" hidden>
+    <span>Tienes elegido el panel lateral, pero se ha abierto el popup.</span>
+    <button id="open-panel">Abrir en panel lateral</button>
+  </div>
+
   <main>
     <section id="view-tabs">
       <p class="hint" id="tabs-summary"></p>
-      <p class="hint" id="debug"></p>
       <ul class="list" id="tabs-list"></ul>
       <footer class="actions">
         <button id="save-close" class="primary">Guardar y cerrar</button>
@@ -38,6 +42,7 @@
         <label><input type="radio" name="uiMode" value="popup"> Popup</label>
         <label><input type="radio" name="uiMode" value="panel" id="mode-panel"> Panel lateral</label>
         <p class="hint" id="panel-unsupported" hidden>Este navegador no admite panel lateral para extensiones.</p>
+        <p class="hint" id="ui-state"></p>
       </fieldset>
       <label><input type="checkbox" id="sync-bookmarks"> Sincronizar guardadas con la carpeta de marcadores "Leer luego" (así viajan con tu Sync a otros dispositivos)</label>
       <label class="field">Días sin abrir para proponer "leer luego"

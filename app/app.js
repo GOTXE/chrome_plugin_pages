@@ -4,7 +4,8 @@ import {
 } from '../shared/store.js';
 
 const $ = (id) => document.getElementById(id);
-const mode = new URLSearchParams(location.search).get('mode') === 'panel' ? 'panel' : 'popup';
+// Solo el popup lleva ?mode=popup; el panel lateral se carga desde el manifest, sin parámetros.
+const mode = new URLSearchParams(location.search).get('mode') === 'popup' ? 'popup' : 'panel';
 document.body.classList.add(`mode-${mode}`);
 
 let settings;
@@ -63,9 +64,6 @@ document.querySelector('.tabs').addEventListener('click', (e) => {
 
 async function loadTabs() {
   const tabs = await chrome.tabs.query({});
-  const wins = await chrome.windows.getAll({ populate: true, windowTypes: ['normal', 'popup', 'app', 'devtools'] });
-  console.log('[leer-luego] ventanas', wins.map((w) => ({ id: w.id, type: w.type, incognito: w.incognito, tabs: w.tabs.length })));
-  $('debug').textContent = `Diagnóstico: ${wins.map((w) => `${w.type}${w.incognito ? '/privada' : ''}:${w.tabs.length}`).join(' · ')}`;
   const now = Date.now();
   const alive = new Set(tabs.map((tab) => tab.id));
   for (const id of overrides.keys()) if (!alive.has(id)) overrides.delete(id);
@@ -266,9 +264,70 @@ if (!chrome.sidePanel) {
   $('panel-unsupported').hidden = false;
 }
 
+// Muestra el estado real del icono y, si el popup se abrió estando elegido el panel,
+// vuelve a aplicar el modo y ofrece abrir el panel desde aquí (con un clic real del usuario).
+async function checkUiMode() {
+  const popup = await chrome.action.getPopup({});
+  const behavior = chrome.sidePanel ? await chrome.sidePanel.getPanelBehavior() : null;
+  $('ui-state').textContent = `Estado: ajuste=${settings.uiMode} · esta vista=${mode} · popup=${popup ? 'definido' : 'vacío'} · el icono abre el panel=${behavior?.openPanelOnActionClick ?? 'n/d'}`;
+
+  if (mode === 'popup' && settings.uiMode === 'panel' && chrome.sidePanel) {
+    host = await resolveHost();
+    $('mode-banner').hidden = false;
+    chrome.runtime.sendMessage({ type: 'apply-ui' }).catch(() => {});
+  }
+}
+
+// Ventana (y pestaña, si se conoce) desde la que se abrió el popup. Se prueban varias consultas
+// porque según el navegador y el tipo de ventana alguna puede devolver vacío.
+async function resolveHost() {
+  const queries = [
+    { active: true, currentWindow: true },
+    { active: true, lastFocusedWindow: true },
+    { active: true, windowType: 'normal' },
+  ];
+  for (const query of queries) {
+    const [tab] = await chrome.tabs.query(query);
+    if (tab) return { windowId: tab.windowId, tabId: tab.id };
+  }
+  const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] }).catch(() => null);
+  return { windowId: win?.id ?? chrome.windows.WINDOW_ID_CURRENT };
+}
+
+async function describeWindows() {
+  const wins = await chrome.windows.getAll({ populate: true }).catch(() => []);
+  return wins.map((win) => `${win.type}${win.incognito ? '/privada' : ''}${win.focused ? '*' : ''}:${win.tabs?.length ?? 0}`).join(' ') || 'ninguna';
+}
+
+// open() debe ser lo primero tras el clic: un await antes puede hacer perder el gesto del usuario,
+// así que la ventana anfitriona se calcula al cargar, no al pulsar.
+let host;
+
+$('open-panel').addEventListener('click', async () => {
+  const failure = async (err) => {
+    console.error(err);
+    $('mode-banner').querySelector('span').textContent = `No se pudo abrir el panel: ${err.message} · ventanas: ${await describeWindows()}`;
+  };
+  try {
+    host ??= await resolveHost();
+    await chrome.sidePanel.open({ windowId: host.windowId });
+    window.close();
+  } catch (windowError) {
+    try {
+      if (host.tabId === undefined) throw windowError;
+      await chrome.sidePanel.open({ tabId: host.tabId });
+      window.close();
+    } catch {
+      await failure(windowError);
+    }
+  }
+});
+
 document.querySelectorAll('input[name="uiMode"]').forEach((radio) => {
   radio.addEventListener('change', async () => {
     settings = await saveSettings({ uiMode: radio.value });
+    await chrome.runtime.sendMessage({ type: 'apply-ui' }).catch(() => {});
+    await checkUiMode();
     toast(radio.value === 'panel'
       ? 'Panel lateral activado: se abrirá al pulsar el icono'
       : 'Popup activado');
@@ -328,5 +387,6 @@ document.addEventListener('visibilitychange', () => {
 
 settings = await getSettings();
 renderSettings();
+await checkUiMode();
 await updateSavedCount();
 await loadTabs();

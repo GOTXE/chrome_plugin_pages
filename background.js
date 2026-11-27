@@ -2,7 +2,10 @@ import { getSettings } from './shared/store.js';
 import { requestSync } from './shared/sync.js';
 
 const POPUP_PATH = 'app/app.html?mode=popup';
-const PANEL_PATH = 'app/app.html?mode=panel';
+// El panel va declarado también en el manifest: lo que se fija con setOptions no sobrevive a
+// un reinicio del navegador, y sin panel registrado sidePanel.open() falla con "No active side panel".
+// La interfaz asume modo panel cuando no recibe ?mode=popup.
+const PANEL_PATH = 'app/app.html';
 
 // Alterna entre popup y panel lateral según el ajuste del usuario.
 async function applyUiMode() {
@@ -56,6 +59,10 @@ chrome.runtime.onStartup.addListener(requestSync);
 requestSync();
 
 safeApply(); // cada vez que arranca el servicio, no solo en instalación o inicio
+// La interfaz pide re-aplicar el modo (al cambiar el ajuste o si detecta que no coincide).
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type === 'apply-ui') safeApply();
+});
 chrome.runtime.onInstalled.addListener(safeApply);
 chrome.runtime.onStartup.addListener(safeApply);
 chrome.storage.onChanged.addListener((changes, area) => {

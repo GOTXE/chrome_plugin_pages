@@ -19,13 +19,13 @@ Comprobación de sintaxis rápida: `node --check` sobre cada `.js`.
 
 - `manifest.json`: sin `default_popup` a propósito (ver más abajo). Sin iconos: si se añaden, deben existir los archivos.
 - `background.js`: service worker. Aplica el modo de interfaz y dispara la sincronización.
-- `app/`: una única interfaz (`app.html/js/css`) que sirve como popup y como panel lateral; el modo llega por `?mode=popup|panel`.
+- `app/`: una única interfaz (`app.html/js/css`) que sirve como popup y como panel lateral; el popup se carga con `?mode=popup` y el panel sin parámetros.
 - `shared/store.js`: ajustes, lista de guardadas, reglas de clasificación y normalización de URL.
 - `shared/sync.js`: espejo bidireccional con una carpeta de marcadores.
 
 ## Decisiones que no son obvias
 
-- **Popup o panel:** `background.js` conmuta con `chrome.action.setPopup` + `sidePanel.setPanelBehavior({ openPanelOnActionClick })` según `settings.uiMode`. El manifest no define `default_popup`; si lo hiciera, el popup se abriría antes de que el modo estuviera aplicado. `action.onClicked` es solo un respaldo. La propiedad es `openPanelOnActionClick`, no `...OnActionIconClick`.
+- **Popup o panel:** `background.js` conmuta con `chrome.action.setPopup` + `sidePanel.setPanelBehavior({ openPanelOnActionClick })` según `settings.uiMode`. El manifest no define `default_popup`; si lo hiciera, el popup se abriría antes de que el modo estuviera aplicado. `action.onClicked` es solo un respaldo. El panel se declara en el manifest (`side_panel.default_path`): lo que se fija con `sidePanel.setOptions` no sobrevive a un reinicio y sin panel registrado `sidePanel.open()` falla con "No active side panel". La propiedad es `openPanelOnActionClick`, no `...OnActionIconClick`.
 - **Estado en `chrome.storage.local`, nunca en variables del service worker** (se apaga a los ~30 s). Claves: `settings`, `saved`, `syncedKeys`.
 - **Duplicados:** se comparan con `urlKey()` (ignora `www`, protocolo, ancla, barra final y parámetros de rastreo), no con la URL en bruto. Úsala siempre que se compare una URL.
 - **Sincronización:** los marcadores de la carpeta "Leer luego" son el canal, porque Brave Sync/Chrome Sync los sincronizan. `chrome.storage.sync` no sirve: ~100 KB de límite, Brave no sincroniza datos de extensiones y el ID de una extensión sin empaquetar cambia por equipo. `syncedKeys` distingue "nueva aquí" de "borrada en otro sitio"; no quitarlo, o los borrados dejarán de propagarse. Si la carpeta desaparece, se vuelve a subir lo local en lugar de borrar la lista.
