@@ -1,4 +1,5 @@
 import { categoryById, categoryFromFolderTitle, folderTitle } from './categories.js';
+import { addExamples } from './learning.js';
 import { domainOf, getClassifications, getSaved, getSettings, saveClassifications, urlKey } from './store.js';
 
 // Sincroniza la lista guardada con una carpeta de marcadores ("Leer luego"), que el
@@ -151,6 +152,7 @@ async function run() {
     return categoryFolders.get(categoryId);
   }
   const classifications = organize ? await getClassifications() : {};
+  const placedNow = {}; // clave -> categoría de la subcarpeta en la que este equipo acaba de crear el marcador
 
   const local = new Map(saved.map((item) => [urlKey(item.url), item]));
   const inBoth = new Set();
@@ -165,6 +167,7 @@ async function run() {
       const category = organize ? classifications[key]?.category : null;
       const parent = category && categoryById(category) ? await folderFor(category) : folder;
       await chrome.bookmarks.create({ parentId: parent.id, title: item.title, url: item.url });
+      if (parent !== folder) placedNow[key] = category;
       inBoth.add(key);
     }
   }
@@ -195,23 +198,44 @@ async function run() {
   }
   await chrome.storage.local.set({ syncedKeys: [...inBoth] });
 
-  if (organize) await organizeByCategory(marks, folder, classifications, folderFor);
+  if (organize) await organizeByCategory(marks, folder, classifications, folderFor, placedNow);
 }
 
 // Manda la carpeta, no la IA: lo que ya está en una subcarpeta de categoría se adopta como su
-// categoría (así las categorías viajan entre dispositivos y las correcciones del usuario cuentan)
-// y no se mueve nunca. Solo se mueven los enlaces sueltos cuya categoría ya se conoce.
-async function organizeByCategory(marks, folder, classifications, folderFor) {
-  const adopted = {};
+// categoría (así las categorías viajan entre dispositivos) y no se mueve nunca. Solo se mueven los
+// enlaces sueltos cuya categoría ya se conoce.
+//
+// `placed` recuerda en qué subcarpeta dejó o vio este equipo cada enlace. Si luego aparece en otra,
+// es una corrección del usuario y se guarda como ejemplo para aprender. Si nunca lo habíamos visto
+// colocado (llegó por Sync ya organizado), adoptar su carpeta no cuenta como corrección: no se puede
+// saber si la puso el usuario o la IA de otro dispositivo, y no se quiere aprender de la propia IA.
+async function organizeByCategory(marks, folder, classifications, folderFor, placedNow) {
+  const patch = {};
+  const corrections = [];
+  const now = Date.now();
+
   for (const [key, { node, category }] of marks) {
+    const cached = classifications[key];
     if (!category) {
-      const known = classifications[key]?.category;
+      const known = cached?.category;
       if (known && categoryById(known) && node.parentId === folder.id) {
         await chrome.bookmarks.move(node.id, { parentId: (await folderFor(known)).id });
+        patch[key] = { ...cached, placed: known };
       }
-    } else if (classifications[key]?.category !== category) {
-      adopted[key] = { category, action: 'later', confidence: 1, at: Date.now(), source: 'folder' };
+    } else if (cached?.placed === category) {
+      continue; // sin cambios
+    } else if (cached?.category === category) {
+      patch[key] = { ...cached, placed: category }; // coincide con lo que sabíamos: solo se anota dónde está
+    } else {
+      const corrected = !!cached?.placed;
+      patch[key] = { category, action: 'later', confidence: 1, at: now, source: corrected ? 'user' : 'sync', placed: category };
+      if (corrected) corrections.push({ key, domain: domainOf(node.url), title: (node.title || '').slice(0, 140), category });
     }
   }
-  if (Object.keys(adopted).length) await saveClassifications(adopted);
+  for (const [key, category] of Object.entries(placedNow)) {
+    patch[key] ??= { ...classifications[key], placed: category };
+  }
+
+  if (Object.keys(patch).length) await saveClassifications(patch);
+  if (corrections.length) await addExamples(corrections);
 }
